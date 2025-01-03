@@ -1,0 +1,64 @@
+[Reference: See .index.txt for complete file listing]
+
+Clause Classifier Implementation Instructions
+=========================================
+
+Class: ClauseClassifier
+----------------------
+
+Purpose:
+Classify contract clauses into predefined categories.
+
+Implementation Details:
+
+1. Classification Architecture
+---------------------------
+- Multi-label classification
+- Hierarchical classification
+- Confidence scoring
+
+2. Training Process
+-----------------
+- Loss functions
+- Label smoothing
+- Class weights
+- Early stopping
+
+3. Prediction Methods
+-------------------
+- Threshold optimization
+- Ensemble predictions
+- Confidence calibration
+
+Code Structure:
+```python
+class ClauseClassifier:
+    def __init__(self, num_labels, model_name='bert-base-uncased'):
+        self.num_labels = num_labels
+        self.model = AutoModelForSequenceClassification.from_pretrained(
+            model_name, 
+            num_labels=num_labels
+        )
+        
+    def train(self, train_data, val_data):
+        """Train classifier"""
+        pass
+        
+    def predict_clause_type(self, clause):
+        """Predict clause category"""
+        pass
+        
+    def evaluate(self, test_data):
+        """Evaluate classifier performance"""
+        pass
+        
+    def save_classifier(self, path):
+        """Save trained classifier"""
+        pass
+```
+
+Key Considerations:
+- Handle class imbalance
+- Interpretability of predictions
+- Model calibration
+- Performance metrics

@@ -1,0 +1,1035 @@
+Project Path: src
+
+Source Tree:
+
+```
+src
+├── __init__.py
+├── utils
+│   ├── metrics.py
+│   ├── evaluation.py
+│   ├── __init__.py
+│   ├── preprocessing.py
+│   └── text_preprocessor.py
+├── models
+│   ├── classifier.py
+│   ├── contract_bert.py
+│   ├── __init__.py
+│   ├── generator.py
+│   ├── clause_generator.py
+│   └── clause_classifier.py
+├── recommenders
+│   ├── collaborative.py
+│   ├── similarity.py
+│   ├── cf_recommender.py
+│   ├── __init__.py
+│   └── doc_sim_recommender.py
+└── data
+    ├── __init__.py
+    └── dataset.py
+
+```
+
+`/Users/arthrod/Library/CloudStorage/GoogleDrive-arthursrodrigues@gmail.com/My Drive/acode/contractrec/src/__init__.py`:
+
+```py
+   1 | """
+   2 | CLAUSEREC: A clause recommendation system
+   3 | """
+
+```
+
+`/Users/arthrod/Library/CloudStorage/GoogleDrive-arthursrodrigues@gmail.com/My Drive/acode/contractrec/src/utils/metrics.py`:
+
+```py
+   1 | from typing import Dict, List, Union, Any
+   2 | from sklearn.metrics import accuracy_score, precision_recall_fscore_support
+   3 | import numpy as np
+   4 | 
+   5 | def compute_classification_metrics(
+   6 |     y_true: List[int],
+   7 |     y_pred: List[int],
+   8 |     labels: List[str] = None
+   9 | ) -> Dict[str, Any]:
+  10 |     """Compute classification metrics.
+  11 |     
+  12 |     Args:
+  13 |         y_true: True labels
+  14 |         y_pred: Predicted labels
+  15 |         labels: Optional label names
+  16 |         
+  17 |     Returns:
+  18 |         Dictionary of metrics
+  19 |     """
+  20 |     # Compute metrics
+  21 |     accuracy = accuracy_score(y_true, y_pred)
+  22 |     precision, recall, f1, support = precision_recall_fscore_support(
+  23 |         y_true,
+  24 |         y_pred,
+  25 |         average="weighted"
+  26 |     )
+  27 |     
+  28 |     metrics = {
+  29 |         "accuracy": float(accuracy),
+  30 |         "precision": float(precision),
+  31 |         "recall": float(recall),
+  32 |         "f1": float(f1)
+  33 |     }
+  34 |     
+  35 |     # Per-class metrics if labels provided
+  36 |     if labels is not None:
+  37 |         per_class = precision_recall_fscore_support(
+  38 |             y_true,
+  39 |             y_pred,
+  40 |             average=None
+  41 |         )
+  42 |         for i, label in enumerate(labels):
+  43 |             metrics[f"{label}_precision"] = float(per_class[0][i])
+  44 |             metrics[f"{label}_recall"] = float(per_class[1][i])
+  45 |             metrics[f"{label}_f1"] = float(per_class[2][i])
+  46 |             metrics[f"{label}_support"] = int(per_class[3][i])
+  47 |             
+  48 |     return metrics
+  49 | 
+  50 | def compute_similarity_metrics(
+  51 |     similarities: List[float],
+  52 |     relevance: List[int],
+  53 |     k: int = None
+  54 | ) -> Dict[str, float]:
+  55 |     """Compute similarity search metrics.
+  56 |     
+  57 |     Args:
+  58 |         similarities: List of similarity scores
+  59 |         relevance: Binary relevance labels
+  60 |         k: Optional cutoff for top-k metrics
+  61 |         
+  62 |     Returns:
+  63 |         Dictionary of metrics
+  64 |     """
+  65 |     if k is None:
+  66 |         k = len(similarities)
+  67 |     
+  68 |     # Sort by similarity
+  69 |     sorted_idx = np.argsort(similarities)[::-1][:k]
+  70 |     relevance_at_k = [relevance[i] for i in sorted_idx]
+  71 |     
+  72 |     # Compute metrics
+  73 |     precision = np.mean(relevance_at_k)
+  74 |     dcg = np.sum([rel/np.log2(i+2) for i, rel in enumerate(relevance_at_k)])
+  75 |     idcg = np.sum([1/np.log2(i+2) for i in range(sum(relevance_at_k))])
+  76 |     ndcg = dcg/idcg if idcg > 0 else 0
+  77 |     
+  78 |     return {
+  79 |         f"precision@{k}": float(precision),
+  80 |         f"ndcg@{k}": float(ndcg)
+  81 |     }
+  82 | 
+  83 | def compute_generation_metrics(
+  84 |     references: List[str],
+  85 |     hypotheses: List[str]
+  86 | ) -> Dict[str, float]:
+  87 |     """Compute text generation metrics.
+  88 |     
+  89 |     Args:
+  90 |         references: Reference texts
+  91 |         hypotheses: Generated texts
+  92 |         
+  93 |     Returns:
+  94 |         Dictionary of metrics
+  95 |     """
+  96 |     from rouge_score import rouge_scorer
+  97 |     
+  98 |     # Initialize ROUGE scorer
+  99 |     scorer = rouge_scorer.RougeScorer(["rouge1", "rouge2", "rougeL"])
+ 100 |     
+ 101 |     # Compute ROUGE scores
+ 102 |     scores = []
+ 103 |     for ref, hyp in zip(references, hypotheses):
+ 104 |         score = scorer.score(ref, hyp)
+ 105 |         scores.append({
+ 106 |             "rouge1_f": score["rouge1"].fmeasure,
+ 107 |             "rouge2_f": score["rouge2"].fmeasure,
+ 108 |             "rougeL_f": score["rougeL"].fmeasure
+ 109 |         })
+ 110 |     
+ 111 |     # Average scores
+ 112 |     avg_scores = {}
+ 113 |     for key in scores[0].keys():
+ 114 |         avg_scores[key] = float(np.mean([s[key] for s in scores]))
+ 115 |         
+ 116 |     return avg_scores
+
+```
+
+`/Users/arthrod/Library/CloudStorage/GoogleDrive-arthursrodrigues@gmail.com/My Drive/acode/contractrec/src/utils/evaluation.py`:
+
+```py
+   1 | """
+   2 | Model evaluation utilities.
+   3 | """
+   4 | from typing import Dict, List
+   5 | import numpy as np
+   6 | 
+   7 | # Placeholder for implementation
+
+```
+
+`/Users/arthrod/Library/CloudStorage/GoogleDrive-arthursrodrigues@gmail.com/My Drive/acode/contractrec/src/utils/__init__.py`:
+
+```py
+   1 | """
+   2 | Utility functions and helper classes.
+   3 | """
+   4 | from .preprocessing import *
+   5 | from .evaluation import *
+
+```
+
+`/Users/arthrod/Library/CloudStorage/GoogleDrive-arthursrodrigues@gmail.com/My Drive/acode/contractrec/src/utils/preprocessing.py`:
+
+```py
+   1 | import re
+   2 | import logging
+   3 | 
+   4 | 
+   5 | class TextPreprocessor:
+   6 |     def __init__(self, max_length: int = 128):
+   7 |         self.max_length = max_length
+   8 |         self.logger = logging.getLogger(__name__)
+   9 | 
+  10 |     def clean_text(self, text: str) -> str:
+  11 |         if text is None or not isinstance(text, str):
+  12 |             self.logger.error("Input text must be a string")
+  13 |             raise ValueError("Input text must be a string")
+  14 |         text = text.strip()
+  15 |         if not text:
+  16 |             self.logger.warning("Empty text provided")
+  17 |             return ""
+  18 |         # Remove special characters and extra whitespace
+  19 |         text = re.sub(r"[^\w\s.,!?-]", "", text)
+  20 |         text = re.sub(r"\s+", " ", text)
+  21 |         self.logger.debug(f"Cleaned text: {text}")
+  22 |         return text.strip()
+  23 | 
+  24 |     def normalize(self, text: str) -> str:
+  25 |         if text is None or not isinstance(text, str):
+  26 |             self.logger.error("Input text must be a string")
+  27 |             raise ValueError("Input text must be a string")
+  28 |         text = text.strip()
+  29 |         if not text:
+  30 |             self.logger.warning("Empty text provided")
+  31 |             return ""
+  32 |         # Convert to lowercase and standardize punctuation
+  33 |         text = text.lower()
+  34 |         text = re.sub(r"[.]+", ".", text)
+  35 |         text = re.sub(r"[!]+", "!", text)
+  36 |         text = re.sub(r"[?]+", "?", text)
+  37 |         text = re.sub(r"[,]+", ",", text)
+  38 |         self.logger.debug(f"Normalized text: {text}")
+  39 |         return text.strip()
+  40 | 
+  41 |     def preprocess(self, text: str) -> str:
+  42 |         if text is None or not isinstance(text, str):
+  43 |             self.logger.error("Input text must be a string")
+  44 |             raise ValueError("Input text must be a string")
+  45 |         text = text.strip()
+  46 |         if not text:
+  47 |             self.logger.warning("Empty text provided")
+  48 |             return ""
+  49 |         # Clean and normalize text
+  50 |         text = self.clean_text(text)
+  51 |         text = self.normalize(text)
+  52 |         # Truncate if needed
+  53 |         if len(text) > self.max_length:
+  54 |             self.logger.warning(f"Text truncated to {self.max_length} characters")
+  55 |             text = text[: self.max_length]
+  56 |         self.logger.debug(f"Preprocessed text: {text}")
+  57 |         return text
+
+```
+
+`/Users/arthrod/Library/CloudStorage/GoogleDrive-arthursrodrigues@gmail.com/My Drive/acode/contractrec/src/models/classifier.py`:
+
+```py
+   1 | import torch
+   2 | import torch.nn as nn
+   3 | from typing import Dict, List
+   4 | 
+   5 | class ClauseClassifier(nn.Module):
+   6 |     """Classifier for identifying contract clause types."""
+   7 |     
+   8 |     def __init__(self, input_size: int, num_classes: int):
+   9 |         """Initialize classifier model.
+  10 |         
+  11 |         Args:
+  12 |             input_size: Size of input features
+  13 |             num_classes: Number of clause classes
+  14 |         """
+  15 |         super().__init__()
+  16 |         self.classifier = nn.Sequential(
+  17 |             nn.Linear(input_size, 512),
+  18 |             nn.ReLU(),
+  19 |             nn.Dropout(0.2),
+  20 |             nn.Linear(512, 128),
+  21 |             nn.ReLU(),
+  22 |             nn.Dropout(0.2),
+  23 |             nn.Linear(128, num_classes)
+  24 |         )
+  25 |         
+  26 |     def forward(self, x: torch.Tensor) -> torch.Tensor:
+  27 |         """Forward pass through classifier.
+  28 |         
+  29 |         Args:
+  30 |             x: Input tensor of shape [batch_size, input_size]
+  31 |             
+  32 |         Returns:
+  33 |             Class logits of shape [batch_size, num_classes]
+  34 |         """
+  35 |         return self.classifier(x)
+  36 |     
+  37 |     def predict(self, x: torch.Tensor) -> torch.Tensor:
+  38 |         """Get class predictions.
+  39 |         
+  40 |         Args:
+  41 |             x: Input tensor
+  42 |             
+  43 |         Returns:
+  44 |             Class predictions
+  45 |         """
+  46 |         logits = self.forward(x)
+  47 |         return torch.argmax(logits, dim=1)
+  48 |         
+  49 |     def predict_proba(self, x: torch.Tensor) -> torch.Tensor:
+  50 |         """Get class probabilities.
+  51 |         
+  52 |         Args:
+  53 |             x: Input tensor
+  54 |             
+  55 |         Returns:
+  56 |             Class probabilities
+  57 |         """
+  58 |         logits = self.forward(x)
+  59 |         return torch.softmax(logits, dim=1)
+  60 |     
+  61 |     @classmethod
+  62 |     def from_pretrained(cls, model_path: str) -> "ClauseClassifier":
+  63 |         """Load pretrained classifier.
+  64 |         
+  65 |         Args:
+  66 |             model_path: Path to saved model
+  67 |             
+  68 |         Returns:
+  69 |             Loaded classifier
+  70 |         """
+  71 |         model_dict = torch.load(model_path)
+  72 |         model = cls(
+  73 |             input_size=model_dict["input_size"],
+  74 |             num_classes=model_dict["num_classes"]
+  75 |         )
+  76 |         model.load_state_dict(model_dict["state_dict"])
+  77 |         return model
+  78 |         
+  79 |     def save_pretrained(self, model_path: str) -> None:
+  80 |         """Save model weights and config.
+  81 |         
+  82 |         Args:
+  83 |             model_path: Path to save model
+  84 |         """
+  85 |         model_dict = {
+  86 |             "input_size": self.classifier[0].in_features,
+  87 |             "num_classes": self.classifier[-1].out_features,
+  88 |             "state_dict": self.state_dict()
+  89 |         }
+  90 |         torch.save(model_dict, model_path)
+
+```
+
+`/Users/arthrod/Library/CloudStorage/GoogleDrive-arthursrodrigues@gmail.com/My Drive/acode/contractrec/src/models/contract_bert.py`:
+
+```py
+   1 | from typing import Dict, Optional, Union
+   2 | import torch
+   3 | import torch.nn as nn
+   4 | from transformers import BertModel, BertTokenizer
+   5 | 
+   6 | class ContractBERT(nn.Module):
+   7 |     """BERT-based model for contract understanding and clause prediction."""
+   8 |     
+   9 |     def __init__(self, model_name: str = "bert-base-uncased", num_labels: int = 2):
+  10 |         """Initialize ContractBERT model.
+  11 |         
+  12 |         Args:
+  13 |             model_name: Name of pretrained BERT model to use
+  14 |             num_labels: Number of clause types to predict
+  15 |         """
+  16 |         super().__init__()
+  17 |         self.bert = BertModel.from_pretrained(model_name)
+  18 |         self.dropout = nn.Dropout(0.1)
+  19 |         self.classifier = nn.Linear(self.bert.config.hidden_size, num_labels)
+  20 |         
+  21 |     def forward(
+  22 |         self,
+  23 |         input_ids: torch.Tensor,
+  24 |         attention_mask: Optional[torch.Tensor] = None,
+  25 |         labels: Optional[torch.Tensor] = None
+  26 |     ) -> Dict[str, torch.Tensor]:
+  27 |         """Forward pass through the model.
+  28 |         
+  29 |         Args:
+  30 |             input_ids: Token IDs
+  31 |             attention_mask: Attention mask for padding
+  32 |             labels: Optional labels for training
+  33 |             
+  34 |         Returns:
+  35 |             Dictionary containing model outputs
+  36 |         """
+  37 |         outputs = self.bert(
+  38 |             input_ids=input_ids,
+  39 |             attention_mask=attention_mask
+  40 |         )
+  41 |         
+  42 |         sequence_output = outputs[0]  # [batch_size, seq_len, hidden_size]
+  43 |         pooled_output = outputs[1]    # [batch_size, hidden_size]
+  44 |         
+  45 |         pooled_output = self.dropout(pooled_output)
+  46 |         logits = self.classifier(pooled_output)
+  47 |         
+  48 |         loss = None
+  49 |         if labels is not None:
+  50 |             loss_fct = nn.CrossEntropyLoss()
+  51 |             loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
+  52 |             
+  53 |         return {
+  54 |             "loss": loss,
+  55 |             "logits": logits,
+  56 |             "hidden_states": outputs.hidden_states
+  57 |         }
+  58 |         
+  59 |     def encode_text(self, text: str, tokenizer: BertTokenizer) -> Dict[str, torch.Tensor]:
+  60 |         """Encode text input using tokenizer.
+  61 |         
+  62 |         Args:
+  63 |             text: Input text to encode
+  64 |             tokenizer: BERT tokenizer
+  65 |             
+  66 |         Returns:
+  67 |             Dictionary of encoded inputs
+  68 |         """
+  69 |         encoded = tokenizer(
+  70 |             text,
+  71 |             padding=True,
+  72 |             truncation=True,
+  73 |             max_length=512,
+  74 |             return_tensors="pt"
+  75 |         )
+  76 |         return encoded
+  77 |         
+  78 |     @classmethod
+  79 |     def from_pretrained(cls, model_path: str) -> "ContractBERT":
+  80 |         """Load model from pretrained weights.
+  81 |         
+  82 |         Args:
+  83 |             model_path: Path to pretrained model
+  84 |             
+  85 |         Returns:
+  86 |             Loaded ContractBERT model
+  87 |         """
+  88 |         model = cls()
+  89 |         model.load_state_dict(torch.load(model_path))
+  90 |         return model
+  91 |         
+  92 |     def save_pretrained(self, model_path: str) -> None:
+  93 |         """Save model weights.
+  94 |         
+  95 |         Args:
+  96 |             model_path: Path to save model
+  97 |         """
+  98 |         torch.save(self.state_dict(), model_path)
+
+```
+
+`/Users/arthrod/Library/CloudStorage/GoogleDrive-arthursrodrigues@gmail.com/My Drive/acode/contractrec/src/models/__init__.py`:
+
+```py
+   1 | """
+   2 | Model implementations and training code.
+   3 | """
+   4 | from .contract_bert import ContractBERT
+   5 | from .clause_classifier import *
+   6 | from .clause_generator import *
+   7 | 
+   8 | __all__ = ['ContractBERT']
+
+```
+
+`/Users/arthrod/Library/CloudStorage/GoogleDrive-arthursrodrigues@gmail.com/My Drive/acode/contractrec/src/models/generator.py`:
+
+```py
+   1 | from typing import Dict, List, Optional
+   2 | import torch
+   3 | import torch.nn as nn
+   4 | from transformers import GPT2LMHeadModel, GPT2Tokenizer
+   5 | 
+   6 | class ClauseGenerator(nn.Module):
+   7 |     """Generator model for creating contract clauses."""
+   8 |     
+   9 |     def __init__(self, model_name: str = "gpt2"):
+  10 |         """Initialize generator model.
+  11 |         
+  12 |         Args:
+  13 |             model_name: Name of pretrained model to use
+  14 |         """
+  15 |         super().__init__()
+  16 |         self.model = GPT2LMHeadModel.from_pretrained(model_name)
+  17 |         self.tokenizer = GPT2Tokenizer.from_pretrained(model_name)
+  18 |         
+  19 |     def forward(
+  20 |         self,
+  21 |         input_ids: torch.Tensor,
+  22 |         attention_mask: Optional[torch.Tensor] = None,
+  23 |         labels: Optional[torch.Tensor] = None
+  24 |     ) -> Dict[str, torch.Tensor]:
+  25 |         """Forward pass through generator.
+  26 |         
+  27 |         Args:
+  28 |             input_ids: Input token IDs
+  29 |             attention_mask: Optional attention mask
+  30 |             labels: Optional labels for training
+  31 |             
+  32 |         Returns:
+  33 |             Model outputs
+  34 |         """
+  35 |         outputs = self.model(
+  36 |             input_ids=input_ids,
+  37 |             attention_mask=attention_mask,
+  38 |             labels=labels
+  39 |         )
+  40 |         return {
+  41 |             "loss": outputs.loss,
+  42 |             "logits": outputs.logits,
+  43 |             "past_key_values": outputs.past_key_values
+  44 |         }
+  45 |     
+  46 |     def generate_clause(
+  47 |         self,
+  48 |         prompt: str,
+  49 |         max_length: int = 256,
+  50 |         num_return_sequences: int = 1,
+  51 |         temperature: float = 1.0,
+  52 |         top_k: int = 50,
+  53 |         top_p: float = 0.95
+  54 |     ) -> List[str]:
+  55 |         """Generate clause text from prompt.
+  56 |         
+  57 |         Args:
+  58 |             prompt: Text prompt to condition generation
+  59 |             max_length: Maximum length of generated text
+  60 |             num_return_sequences: Number of sequences to generate
+  61 |             temperature: Sampling temperature
+  62 |             top_k: Top-k sampling parameter
+  63 |             top_p: Nucleus sampling parameter
+  64 |             
+  65 |         Returns:
+  66 |             List of generated clause texts
+  67 |         """
+  68 |         # Encode prompt
+  69 |         inputs = self.tokenizer(
+  70 |             prompt,
+  71 |             return_tensors="pt",
+  72 |             padding=True,
+  73 |             truncation=True
+  74 |         )
+  75 |         
+  76 |         # Generate text
+  77 |         outputs = self.model.generate(
+  78 |             inputs.input_ids,
+  79 |             attention_mask=inputs.attention_mask,
+  80 |             max_length=max_length,
+  81 |             num_return_sequences=num_return_sequences,
+  82 |             temperature=temperature,
+  83 |             top_k=top_k,
+  84 |             top_p=top_p,
+  85 |             do_sample=True,
+  86 |             pad_token_id=self.tokenizer.eos_token_id
+  87 |         )
+  88 |         
+  89 |         # Decode outputs
+  90 |         generated_texts = []
+  91 |         for output in outputs:
+  92 |             text = self.tokenizer.decode(output, skip_special_tokens=True)
+  93 |             generated_texts.append(text)
+  94 |             
+  95 |         return generated_texts
+  96 |     
+  97 |     @classmethod
+  98 |     def from_pretrained(cls, model_path: str) -> "ClauseGenerator":
+  99 |         """Load pretrained generator.
+ 100 |         
+ 101 |         Args:
+ 102 |             model_path: Path to saved model
+ 103 |             
+ 104 |         Returns:
+ 105 |             Loaded generator model
+ 106 |         """
+ 107 |         model = cls()
+ 108 |         model.load_state_dict(torch.load(model_path))
+ 109 |         return model
+ 110 |         
+ 111 |     def save_pretrained(self, model_path: str) -> None:
+ 112 |         """Save model weights.
+ 113 |         
+ 114 |         Args:
+ 115 |             model_path: Path to save model
+ 116 |         """
+ 117 |         torch.save(self.state_dict(), model_path)
+
+```
+
+`/Users/arthrod/Library/CloudStorage/GoogleDrive-arthursrodrigues@gmail.com/My Drive/acode/contractrec/src/models/clause_generator.py`:
+
+```py
+   1 | """
+   2 | Implementation of the clause generation model.
+   3 | """
+   4 | from typing import Dict, List, Optional
+   5 | 
+   6 | import torch
+   7 | import torch.nn as nn
+   8 | 
+   9 | # Placeholder for implementation
+
+```
+
+`/Users/arthrod/Library/CloudStorage/GoogleDrive-arthursrodrigues@gmail.com/My Drive/acode/contractrec/src/models/clause_classifier.py`:
+
+```py
+   1 | """
+   2 | Implementation of the clause classification model.
+   3 | """
+   4 | from typing import Dict, List, Optional
+   5 | 
+   6 | import torch
+   7 | import torch.nn as nn
+   8 | 
+   9 | # Placeholder for implementation
+
+```
+
+`/Users/arthrod/Library/CloudStorage/GoogleDrive-arthursrodrigues@gmail.com/My Drive/acode/contractrec/src/recommenders/collaborative.py`:
+
+```py
+   1 | from typing import List, Dict, Optional
+   2 | import numpy as np
+   3 | import faiss
+   4 | import torch
+   5 | from sklearn.metrics.pairwise import cosine_similarity
+   6 | 
+   7 | class CollaborativeFilter:
+   8 |     """Collaborative filtering recommender for contract clauses."""
+   9 |     
+  10 |     def __init__(self, n_factors: int = 100):
+  11 |         """Initialize collaborative filter.
+  12 |         
+  13 |         Args:
+  14 |             n_factors: Number of latent factors
+  15 |         """
+  16 |         self.n_factors = n_factors
+  17 |         self.user_factors = None
+  18 |         self.item_factors = None
+  19 |         
+  20 |     def fit(self, ratings: np.ndarray) -> None:
+  21 |         """Train collaborative filter on ratings matrix.
+  22 |         
+  23 |         Args:
+  24 |             ratings: User-item ratings matrix
+  25 |         """
+  26 |         # SVD decomposition
+  27 |         U, s, Vh = np.linalg.svd(
+  28 |             ratings,
+  29 |             full_matrices=False
+  30 |         )
+  31 |         
+  32 |         # Get latent factors
+  33 |         s_root = np.sqrt(s[:self.n_factors])
+  34 |         self.user_factors = U[:, :self.n_factors] * s_root
+  35 |         self.item_factors = Vh[:self.n_factors, :].T * s_root[:, np.newaxis]
+  36 |         
+  37 |     def predict(self, user_idx: int, item_idx: Optional[int] = None) -> np.ndarray:
+  38 |         """Predict ratings for user-item pairs.
+  39 |         
+  40 |         Args:
+  41 |             user_idx: User index
+  42 |             item_idx: Optional item index (if None, predict all items)
+  43 |             
+  44 |         Returns:
+  45 |             Predicted ratings
+  46 |         """
+  47 |         if item_idx is None:
+  48 |             return self.user_factors[user_idx] @ self.item_factors.T
+  49 |         return self.user_factors[user_idx] @ self.item_factors[item_idx]
+  50 |         
+  51 |     def recommend(self, user_idx: int, n_items: int = 10) -> List[int]:
+  52 |         """Get top-N recommendations for user.
+  53 |         
+  54 |         Args:
+  55 |             user_idx: User index
+  56 |             n_items: Number of items to recommend
+  57 |             
+  58 |         Returns:
+  59 |             List of recommended item indices
+  60 |         """
+  61 |         # Predict ratings for all items
+  62 |         pred_ratings = self.predict(user_idx)
+  63 |         
+  64 |         # Get top-N items
+  65 |         return np.argsort(pred_ratings)[-n_items:]
+  66 |         
+  67 |     def similar_items(self, item_idx: int, n_items: int = 10) -> List[int]:
+  68 |         """Find similar items using latent factors.
+  69 |         
+  70 |         Args:
+  71 |             item_idx: Reference item index
+  72 |             n_items: Number of similar items to return
+  73 |             
+  74 |         Returns:
+  75 |             List of similar item indices
+  76 |         """
+  77 |         # Compute similarities between items
+  78 |         sims = cosine_similarity(
+  79 |             self.item_factors[item_idx].reshape(1, -1),
+  80 |             self.item_factors
+  81 |         )
+  82 |         
+  83 |         # Get top-N similar items
+  84 |         return np.argsort(sims[0])[-n_items:]
+  85 |         
+  86 |     def save(self, filepath: str) -> None:
+  87 |         """Save model factors.
+  88 |         
+  89 |         Args:
+  90 |             filepath: Path to save model
+  91 |         """
+  92 |         np.savez(
+  93 |             filepath,
+  94 |             user_factors=self.user_factors,
+  95 |             item_factors=self.item_factors
+  96 |         )
+  97 |         
+  98 |     @classmethod
+  99 |     def load(cls, filepath: str) -> "CollaborativeFilter":
+ 100 |         """Load saved model.
+ 101 |         
+ 102 |         Args:
+ 103 |             filepath: Path to saved model
+ 104 |             
+ 105 |         Returns:
+ 106 |             Loaded model
+ 107 |         """
+ 108 |         data = np.load(filepath)
+ 109 |         model = cls(n_factors=data["user_factors"].shape[1])
+ 110 |         model.user_factors = data["user_factors"]
+ 111 |         model.item_factors = data["item_factors"]
+ 112 |         return model
+
+```
+
+`/Users/arthrod/Library/CloudStorage/GoogleDrive-arthursrodrigues@gmail.com/My Drive/acode/contractrec/src/recommenders/similarity.py`:
+
+```py
+   1 | from typing import List, Dict, Optional
+   2 | import numpy as np
+   3 | import faiss
+   4 | from transformers import AutoModel, AutoTokenizer
+   5 | 
+   6 | class SimilarityRecommender:
+   7 |     """Document similarity-based recommender for contract clauses."""
+   8 |     
+   9 |     def __init__(self, model_name: str = "bert-base-uncased", index_type: str = "l2"):
+  10 |         """Initialize similarity recommender.
+  11 |         
+  12 |         Args:
+  13 |             model_name: Name of pretrained model for embeddings
+  14 |             index_type: Type of FAISS index (l2 or cosine)
+  15 |         """
+  16 |         self.model = AutoModel.from_pretrained(model_name)
+  17 |         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+  18 |         self.index = None
+  19 |         self.index_type = index_type
+  20 |         self.documents = []
+  21 |         
+  22 |     def _get_embeddings(self, texts: List[str]) -> np.ndarray:
+  23 |         """Get document embeddings using pretrained model.
+  24 |         
+  25 |         Args:
+  26 |             texts: List of document texts
+  27 |             
+  28 |         Returns:
+  29 |             Document embedding matrix
+  30 |         """
+  31 |         # Tokenize texts
+  32 |         inputs = self.tokenizer(
+  33 |             texts,
+  34 |             padding=True,
+  35 |             truncation=True,
+  36 |             max_length=512,
+  37 |             return_tensors="pt"
+  38 |         )
+  39 |         
+  40 |         # Get embeddings
+  41 |         outputs = self.model(**inputs)
+  42 |         embeddings = outputs.last_hidden_state[:, 0].detach().numpy()
+  43 |         
+  44 |         # Normalize if using cosine similarity
+  45 |         if self.index_type == "cosine":
+  46 |             faiss.normalize_L2(embeddings)
+  47 |             
+  48 |         return embeddings
+  49 |         
+  50 |     def fit(self, documents: List[str]) -> None:
+  51 |         """Build search index from documents.
+  52 |         
+  53 |         Args:
+  54 |             documents: List of document texts
+  55 |         """
+  56 |         self.documents = documents
+  57 |         embeddings = self._get_embeddings(documents)
+  58 |         
+  59 |         # Create FAISS index
+  60 |         dimension = embeddings.shape[1]
+  61 |         if self.index_type == "cosine":
+  62 |             self.index = faiss.IndexFlatIP(dimension)
+  63 |         else:
+  64 |             self.index = faiss.IndexFlatL2(dimension)
+  65 |             
+  66 |         self.index.add(embeddings)
+  67 |         
+  68 |     def recommend(self, query: str, k: int = 10) -> List[Dict]:
+  69 |         """Get similar documents for query.
+  70 |         
+  71 |         Args:
+  72 |             query: Query text
+  73 |             k: Number of recommendations
+  74 |             
+  75 |         Returns:
+  76 |             List of recommendations with scores
+  77 |         """
+  78 |         # Get query embedding
+  79 |         query_emb = self._get_embeddings([query])
+  80 |         
+  81 |         # Search index
+  82 |         scores, indices = self.index.search(query_emb, k)
+  83 |         
+  84 |         # Format results
+  85 |         results = []
+  86 |         for score, idx in zip(scores[0], indices[0]):
+  87 |             results.append({
+  88 |                 "document": self.documents[idx],
+  89 |                 "score": float(score)
+  90 |             })
+  91 |             
+  92 |         return results
+  93 |         
+  94 |     def save(self, index_path: str) -> None:
+  95 |         """Save FAISS index.
+  96 |         
+  97 |         Args:
+  98 |             index_path: Path to save index
+  99 |         """
+ 100 |         faiss.write_index(self.index, index_path)
+ 101 |         
+ 102 |     @classmethod
+ 103 |     def load(cls, index_path: str, documents: List[str], model_name: str = "bert-base-uncased") -> "SimilarityRecommender":
+ 104 |         """Load saved recommender.
+ 105 |         
+ 106 |         Args:
+ 107 |             index_path: Path to saved index
+ 108 |             documents: List of documents
+ 109 |             model_name: Name of pretrained model
+ 110 |             
+ 111 |         Returns:
+ 112 |             Loaded recommender
+ 113 |         """
+ 114 |         recommender = cls(model_name=model_name)
+ 115 |         recommender.documents = documents
+ 116 |         recommender.index = faiss.read_index(index_path)
+ 117 |         return recommender
+
+```
+
+`/Users/arthrod/Library/CloudStorage/GoogleDrive-arthursrodrigues@gmail.com/My Drive/acode/contractrec/src/recommenders/cf_recommender.py`:
+
+```py
+   1 | """
+   2 | Implementation of collaborative filtering recommender.
+   3 | """
+   4 | from typing import Dict, List
+   5 | 
+   6 | import numpy as np
+   7 | 
+   8 | # Placeholder for implementation
+
+```
+
+`/Users/arthrod/Library/CloudStorage/GoogleDrive-arthursrodrigues@gmail.com/My Drive/acode/contractrec/src/recommenders/__init__.py`:
+
+```py
+   1 | """
+   2 | Recommendation system implementations.
+   3 | """
+   4 | from .cf_recommender import *
+   5 | from .doc_sim_recommender import *
+
+```
+
+`/Users/arthrod/Library/CloudStorage/GoogleDrive-arthursrodrigues@gmail.com/My Drive/acode/contractrec/src/recommenders/doc_sim_recommender.py`:
+
+```py
+   1 | """
+   2 | Implementation of document similarity recommender.
+   3 | """
+   4 | from typing import Dict, List
+   5 | 
+   6 | import faiss
+   7 | import numpy as np
+   8 | 
+   9 | # Placeholder for implementation
+
+```
+
+`/Users/arthrod/Library/CloudStorage/GoogleDrive-arthursrodrigues@gmail.com/My Drive/acode/contractrec/src/data/__init__.py`:
+
+```py
+   1 | """
+   2 | Data loading and processing modules
+   3 | """
+   4 | 
+   5 | from .dataset import LedgarDataset
+   6 | 
+   7 | __all__ = ['LedgarDataset']
+
+```
+
+`/Users/arthrod/Library/CloudStorage/GoogleDrive-arthursrodrigues@gmail.com/My Drive/acode/contractrec/src/data/dataset.py`:
+
+```py
+   1 | from typing import List, Dict, Optional
+   2 | import os
+   3 | import logging
+   4 | from transformers import AutoTokenizer
+   5 | import pandas as pd
+   6 | import numpy as np
+   7 | 
+   8 | class LedgarDataset:
+   9 |     """Dataset class for handling contract documents and clauses."""
+  10 |     
+  11 |     def __init__(self, data_dir: str, tokenizer_name: str = "bert-base-uncased"):
+  12 |         """Initialize dataset with data directory and tokenizer.
+  13 |         
+  14 |         Args:
+  15 |             data_dir: Directory containing contract documents
+  16 |             tokenizer_name: Name of pretrained tokenizer to use
+  17 |         """
+  18 |         self.data_dir = data_dir
+  19 |         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
+  20 |         self.logger = logging.getLogger(__name__)
+  21 |         
+  22 |     def load_contracts(self, file_pattern: str = "*.txt") -> List[Dict]:
+  23 |         """Load contract documents from data directory.
+  24 |         
+  25 |         Args:
+  26 |             file_pattern: Pattern to match contract files
+  27 |             
+  28 |         Returns:
+  29 |             List of dictionaries containing contract data
+  30 |         """
+  31 |         contracts = []
+  32 |         for file in os.listdir(self.data_dir):
+  33 |             if file.endswith(".txt"):
+  34 |                 with open(os.path.join(self.data_dir, file)) as f:
+  35 |                     text = f.read()
+  36 |                     contracts.append({
+  37 |                         "id": file,
+  38 |                         "text": self.preprocess_text(text)
+  39 |                     })
+  40 |         return contracts
+  41 |     
+  42 |     def preprocess_text(self, text: str) -> str:
+  43 |         """Clean and normalize contract text.
+  44 |         
+  45 |         Args:
+  46 |             text: Raw contract text
+  47 |             
+  48 |         Returns:
+  49 |             Preprocessed text
+  50 |         """
+  51 |         # Remove special characters
+  52 |         text = "".join(char for char in text if char.isprintable())
+  53 |         
+  54 |         # Normalize whitespace
+  55 |         text = " ".join(text.split())
+  56 |         
+  57 |         return text
+  58 |         
+  59 |     def extract_clauses(self, contract_text: str) -> List[Dict]:
+  60 |         """Extract individual clauses from contract text.
+  61 |         
+  62 |         Args:
+  63 |             contract_text: Full contract text
+  64 |             
+  65 |         Returns:
+  66 |             List of clause dictionaries
+  67 |         """
+  68 |         # Simple clause extraction by paragraphs
+  69 |         paragraphs = contract_text.split("\n\n")
+  70 |         clauses = []
+  71 |         
+  72 |         for i, text in enumerate(paragraphs):
+  73 |             if text.strip():
+  74 |                 clauses.append({
+  75 |                     "id": i,
+  76 |                     "text": text.strip()
+  77 |                 })
+  78 |                 
+  79 |         return clauses
+  80 |         
+  81 |     def tokenize_text(self, text: str) -> Dict:
+  82 |         """Tokenize text using pretrained tokenizer.
+  83 |         
+  84 |         Args:
+  85 |             text: Text to tokenize
+  86 |             
+  87 |         Returns:
+  88 |             Dictionary of token IDs and attention mask
+  89 |         """
+  90 |         return self.tokenizer(
+  91 |             text,
+  92 |             padding=True,
+  93 |             truncation=True,
+  94 |             max_length=512,
+  95 |             return_tensors="pt"
+  96 |         )
+  97 |         
+  98 |     def validate_data(self, data: Dict) -> bool:
+  99 |         """Validate contract data format and contents.
+ 100 |         
+ 101 |         Args:
+ 102 |             data: Contract data dictionary
+ 103 |             
+ 104 |         Returns:
+ 105 |             True if valid, False otherwise
+ 106 |         """
+ 107 |         required_fields = ["id", "text"]
+ 108 |         
+ 109 |         # Check required fields
+ 110 |         if not all(field in data for field in required_fields):
+ 111 |             self.logger.error(f"Missing required fields: {required_fields}")
+ 112 |             return False
+ 113 |             
+ 114 |         # Validate text content
+ 115 |         if not isinstance(data["text"], str) or len(data["text"]) == 0:
+ 116 |             self.logger.error("Invalid or empty text field")
+ 117 |             return False
+ 118 |             
+ 119 |         return True
+
+```

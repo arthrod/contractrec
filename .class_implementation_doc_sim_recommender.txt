@@ -1,0 +1,61 @@
+[Reference: See .index.txt for complete file listing]
+
+Document Similarity Recommender Implementation Instructions
+=====================================================
+
+Class: DocSimRecommender
+-----------------------
+
+Purpose:
+Implement document similarity-based clause recommendations.
+
+Implementation Details:
+
+1. Similarity Computation
+-----------------------
+- Embedding generation
+- Distance metrics
+- Index structures
+
+2. Search Process
+---------------
+- Approximate nearest neighbors
+- Semantic search
+- Filtering mechanisms
+
+3. Ranking System
+---------------
+- Score combination
+- Re-ranking
+- Diversity
+
+Code Structure:
+```python
+class DocSimRecommender:
+    def __init__(self, embedding_dim=768, index_type='IVFFlat'):
+        self.embedding_dim = embedding_dim
+        self.index_type = index_type
+        self.index = None
+        
+    def build_index(self, clauses):
+        """Build FAISS index"""
+        pass
+        
+    def compute_embeddings(self, texts):
+        """Compute document embeddings"""
+        pass
+        
+    def find_similar_clauses(self, query, k=10):
+        """Find similar clauses"""
+        pass
+        
+    def rank_recommendations(self, similarities):
+        """Rank recommendations"""
+        pass
+```
+
+Key Considerations:
+- Index efficiency
+- Search speed
+- Memory usage
+- Result quality

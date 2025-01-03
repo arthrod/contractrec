@@ -1,0 +1,67 @@
+[Reference: See .index.txt for complete file listing]
+
+LEDGAR Dataset Implementation Instructions
+========================================
+
+Class: LedgarDataset
+-------------------
+
+Purpose:
+Handle the LEDGAR dataset processing and management for contract clause analysis.
+
+Implementation Details:
+
+1. Data Loading
+--------------
+- Load JSON format contract clauses
+- Parse metadata and labels
+- Handle multi-label classification
+
+2. Preprocessing
+---------------
+- Clean text (remove special characters, normalize whitespace)
+- Tokenization using ContractBERT tokenizer
+- Handle maximum sequence length
+
+3. Data Splits
+-------------
+- Create stratified splits for training/validation
+- Maintain label distribution
+- Handle imbalanced classes
+
+4. Features
+----------
+- Extract clause embeddings
+- Create attention masks
+- Generate label encodings
+
+Code Structure:
+```python
+class LedgarDataset:
+    def __init__(self, data_path, max_length=512):
+        self.data_path = data_path
+        self.max_length = max_length
+        self.tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
+        
+    def load_data(self):
+        """Load and parse LEDGAR JSON data"""
+        pass
+        
+    def preprocess_clauses(self):
+        """Clean and preprocess clause text"""
+        pass
+        
+    def create_splits(self):
+        """Create stratified data splits"""
+        pass
+        
+    def get_clause_embeddings(self):
+        """Generate clause embeddings"""
+        pass
+```
+
+Key Considerations:
+- Memory efficient data loading
+- Proper handling of long sequences
+- Robust error handling
+- Caching mechanisms for processed data

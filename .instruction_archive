@@ -1,6 +1,6 @@
 <instructions>
 <initial_instructions>
-The final instructions are in the end of this file. Please review them carefully. The goal is to reproduce the results of the paper. I will provide the paper, my original plan and some criticism. 
+The final instructions are in the end of this file. Please review them carefully. The goal is to reproduce the results of the paper. I will provide the paper, my original plan and some criticism. You are in an environment managed by "uv" (NOT uvicorn). To install dependencies, use "uv pip install [dependency]".
 </initial_instructions>
 <paper>
 arXiv:2110.15794v1 [cs.CL] 26 Oct 2021
@@ -6770,7 +6770,7 @@ ChatGPT is excellent for interactive, freeform drafting or Q&A. But for tasks li
 This CLAUSEREC pipeline doesn’t discard ChatGPT-like models altogether—in principle, one could pair them. But the authors’ methodology aims to build a self-contained system that deeply understands the “structure” of contracts, can handle classification, and has consistent generation specialized for legal language.
 </criticism>
 <final_instructions>
-The goal is to reproduce the results of the paper. I will provide the paper, my original plan and some criticism. Please be aware of context limitations. 
+The goal is to reproduce the results of the paper. I will provide the paper, my original plan and some criticism. Please be aware of context limitations. You are in an environment managed by "uv" (NOT uvicorn). To install dependencies, use "uv pip install [dependency]".
 Your tasks are:
 1. Split these instructions into "digestible" parts. Remember to add a general index to these instructions (to each file, add 'You must consult the .index.txt file to understand the overall instructions').
 2. Determine the best way to reproduce the results of the paper.
@@ -6783,3 +6783,6 @@ a3, etc: .class_implementation[class_name].txt: a detailed plan for the implemen
 Feel free to organize the plan in a way that is most convenient for you.
 </final_instructions>
 </instructions>
+
+aidra -m "Your instructions are contained in '/Users/arthrod/Library/CloudStorage/GoogleDrive-arthursrodrigues@gmail.com/My Drive/acode/contractrec/instructions.txt'. Remember, use quotes when trying to access files, including and specially the instructions file. Please read your instructions contained on .instructions.txt. Don't forget the quotes for files. When using aider, remember to pass --files argument AND openrouter as the provider of the inference (no changes to model choice). Fucking quotes when trying to access files, don't forget. Do NOT add a single placeholder! Implement one by one." --cowboy-mode --provider openrouter --model "anthropic/claude-3.5-sonnet:beta" --verbose
+aidra -m "Remember, use quotes when trying to access files. Please read your instructions contained on instructions.txt. Don't forget the quotes for files. They are here: '/Users/arthrod/Library/CloudStorage/GoogleDrive-arthursrodrigues@gmail.com/My Drive/acode/contractrec/.instructions.txt' when using aider, remember to pass --files argument AND openrouter as the provider of the inference (no changes to model choice). Fucking quotes when trying to access files, don't forget" --cowboy-mode --provider openrouter --model "anthropic/claude-3.5-sonnet:beta" --verbose

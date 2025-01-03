@@ -1,0 +1,62 @@
+[Reference: See .index.txt for complete file listing]
+
+Collaborative Filtering Recommender Implementation Instructions
+=========================================================
+
+Class: CFRecommender
+-------------------
+
+Purpose:
+Implement collaborative filtering for clause recommendations.
+
+Implementation Details:
+
+1. Matrix Factorization
+---------------------
+- User-clause matrix
+- Implicit feedback handling
+- Regularization techniques
+
+2. Training Process
+-----------------
+- Alternating least squares
+- Hyperparameter optimization
+- Cold start handling
+
+3. Recommendation Generation
+--------------------------
+- Similarity computation
+- Ranking algorithms
+- Diversity promotion
+
+Code Structure:
+```python
+class CFRecommender:
+    def __init__(self, num_factors=100, regularization=0.01):
+        self.num_factors = num_factors
+        self.regularization = regularization
+        self.user_factors = None
+        self.item_factors = None
+        
+    def build_user_matrix(self, interactions):
+        """Build user-clause interaction matrix"""
+        pass
+        
+    def train_collaborative_filter(self, train_data):
+        """Train CF model"""
+        pass
+        
+    def get_recommendations(self, user_id, n=10):
+        """Get clause recommendations"""
+        pass
+        
+    def update_preferences(self, user_id, clause_id, rating):
+        """Update user preferences"""
+        pass
+```
+
+Key Considerations:
+- Scalability
+- Cold start problems
+- Update frequency
+- Performance metrics

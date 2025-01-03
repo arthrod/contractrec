@@ -1,0 +1,62 @@
+[Reference: See .index.txt for complete file listing]
+
+Clause Generator Implementation Instructions
+========================================
+
+Class: ClauseGenerator
+---------------------
+
+Purpose:
+Generate contract clauses based on context and requirements.
+
+Implementation Details:
+
+1. Generation Architecture
+------------------------
+- Transformer-based generation
+- Conditional generation
+- Template integration
+
+2. Generation Process
+-------------------
+- Context conditioning
+- Beam search
+- Output validation
+- Legal compliance
+
+3. Quality Control
+----------------
+- Grammar checking
+- Legal term verification
+- Style consistency
+
+Code Structure:
+```python
+class ClauseGenerator:
+    def __init__(self, model_path, max_length=512):
+        self.model = AutoModelForCausalLM.from_pretrained(model_path)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_path)
+        self.max_length = max_length
+        
+    def generate_clause(self, prompt, context):
+        """Generate new clause"""
+        pass
+        
+    def condition_on_context(self, context):
+        """Condition generation on context"""
+        pass
+        
+    def beam_search(self, input_ids, num_beams=5):
+        """Perform beam search"""
+        pass
+        
+    def validate_output(self, generated_clause):
+        """Validate generated clause"""
+        pass
+```
+
+Key Considerations:
+- Legal accuracy
+- Context relevance
+- Output diversity
+- Safety constraints

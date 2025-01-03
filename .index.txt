@@ -1,0 +1,32 @@
+CLAUSEREC Implementation Instructions Index
+=========================================
+
+This index lists all instruction files for implementing the CLAUSEREC system.
+
+1. .general_plan.txt
+   Purpose: High-level implementation plan and project structure overview
+   
+2. .consolidated_classes_functions.txt
+   Purpose: Comprehensive list of all classes and functions in the system
+
+3. Class Implementation Files:
+   
+   a. .class_implementation_ledgar_dataset.txt
+      Purpose: Implementation details for LEDGAR dataset handling
+   
+   b. .class_implementation_contract_bert.txt
+      Purpose: ContractBERT model implementation and fine-tuning
+   
+   c. .class_implementation_clause_classifier.txt
+      Purpose: Clause classification model implementation
+   
+   d. .class_implementation_clause_generator.txt
+      Purpose: Contract clause generation implementation
+   
+   e. .class_implementation_cf_recommender.txt
+      Purpose: Collaborative filtering recommender system
+   
+   f. .class_implementation_doc_sim_recommender.txt
+      Purpose: Document similarity-based recommender system
+
+Each file contains detailed implementation instructions referencing this index.

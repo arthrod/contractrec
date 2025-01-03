@@ -1,0 +1,3008 @@
+<instructions>
+<initial_instructions>
+The final instructions are in the end of this file. Please review them carefully. You will implement three rounds of modifications. .The goal is to reproduce the results of the paper. I will provide the paper, my original plan and some criticism. You are in an environment managed by "uv" (NOT uvicorn). To install dependencies, use "uv pip install [dependency]".
+</initial_instructions>
+<paper>
+arXiv:2110.15794v1 [cs.CL] 26 Oct 2021
+CLAUSEREC: A Clause Recommendation Framework for AI-aided
+Contract Authoring
+Aparna Garimella
+Adobe Research
+garimell@adobe.com
+Vinay Aggarwal
+Adobe Research
+vinayagg@adobe.com
+Anandhavelu N
+Adobe Research
+anandvn@adobe.com
+Abstract
+Contracts are a common type of legal docu-
+ment that frequent in several day-to-day busi-
+ness workflows. However, there has been very
+limited NLP research in processing such doc-
+uments, and even lesser in generating them.
+These contracts are made up of clauses, and
+the unique nature of these clauses calls for
+specific methods to understand and generate
+such documents. In this paper, we intro-
+duce the task of clause recommendation, as
+a first step to aid and accelerate the author-
+ing of contract documents. We propose a two-
+staged pipeline to first predict if a specific
+clause type is relevant to be added in a con-
+tract, and then recommend the top clauses for
+the given type based on the contract context.
+We pretrain BERT on an existing library of
+clauses with two additional tasks and use it
+for our prediction and recommendation. We
+experiment with classification methods and
+similarity-based heuristics for clause relevance
+prediction, and generation-based methods for
+clause recommendation, and evaluate the re-
+sults from various methods on several clause
+types. We provide analyses on the results, and
+further outline the advantages and limitations
+of the various methods for this line of research.
+1 Introduction
+A contract is a legal document between at least two
+parties that outlines the terms and conditions of the
+parties to an agreement. Contracts are typically in
+textual format, thus providing a huge potential for
+NLP applications in the space of legal documents.
+However, unlike most natural language corpora that
+are typically used in NLP research, contract lan-
+guage is repetitive with high inter-sentence similar-
+ities and sentence matches (Simonson et al., 2019),
+calling for new methods specific to legal language
+to understand and generate contract documents.
+A contract is essentially made up of clauses,
+which are provisions to address specific terms of
+the agreement, and which form the legal essence
+Balaji Vasan Srinivasan
+Adobe Research
+balsrini@adobe.com
+Rajiv Jain
+Adobe Research
+rajijain@adobe.com
+of the contract. Drafting a contract involves select-
+ing an appropriate template (with skeletal set of
+clauses), and customizing it for the specific pur-
+pose, typically via adding, removing, or modifying
+the various clauses in it. Both these stages involve
+manual effort and domain knowledge, and hence
+can benefit from assistance from NLP methods that
+are trained on large collections of contract docu-
+ments. In this paper, we attempt to take the first
+step towards AI-assisted contract authoring, and
+introduce the task of clause recommendation, and
+propose a two-staged approach to solve it.
+There have been some recent works on item-
+based and content-based recommendations. Wang
+and Fu (2020) reformulated the next sentence pre-
+diction task in BERT (Devlin et al., 2019) as
+next purchase prediction task to make a collabora-
+tive filtering based recommendation system for e-
+commerce setting. Malkiel et al. (2020) introduced
+RecoBERT leveraging textual description of items
+such as titles to build an item-to-item recommen-
+dation system for wine and fashion domains. In
+the space of text-based content recommendations,
+Bhagavatula et al. (2018) proposed a method to rec-
+ommend citations in academic paper drafts without
+using metadata. However, legal documents remain
+unexplored, and it is not straightforward to extend
+these methods to recommend clauses in contracts,
+as these documents are heavily domain-specific
+and recommending content in them requires spe-
+cific understanding of their language.
+In this paper, clause recommendation is defined
+as the process of automatically providing recom-
+mendations of clauses that may be added to a given
+contract while authoring it. We propose a two-
+staged approach: first, we predict if a given clause
+type is relevant to be added to the given input con-
+tract; examples of clause types include governing
+laws, confidentiality, etc. Next, if a given clause
+type is predicted as relevant, we provide context-
+aware recommendations of clauses belonging to
+Figure 1: CLAUSEREC pipeline: Binary classification + generation for clause recommendation.
+the given type for the input contract. We develop
+CONTRACTBERT, by further pre-training BERT
+using two additional tasks, and use it as the under-
+lying language model in both the stages to adapt
+it to contracts. To the best of our knowledge, this
+is the first effort towards developing AI assistants
+for authoring and generating long domain-specific
+legal contracts.
+2 Methodology
+A contract can be viewed as a collection of clauses
+with each clause comprising of: (a) the clause la-
+bel that represents the type of the clause and (b)
+the clause content. Our approach consists of two
+stages: (1) clause type relevance prediction: pre-
+dicting if a given clause type that is not present in
+the given contract may be relevant to it, and (2)
+clause recommendation: recommending clauses
+corresponding to the given type that may be rele-
+vant to the contract. Figure 1 shows an overview of
+our proposed pipeline.
+First, we build a model to effectively represent a
+contract by further pre-training BERT, a pre-trained
+Transformer-based encoder (Devlin et al., 2019),
+on contracts to bias it towards legal language. We
+refer to the resulting model as CONTRACTBERT.
+In addition to masked language modelling and next
+sentence prediction, CONTRACTBERT is trained
+to predict (i) if the words in a clause label belong
+to a specific clause, and (ii) if two sentences be-
+long to the same clause, enabling the embeddings
+of similar clauses to cluster together. Figure 2
+and 3 show the difference in the performance of
+BERT and CONTRACTBERT to get a meaningful
+clause embedding. BERT is unable to differen-
+tiate between the clauses of different types as it
+is unfamiliar with legal language. On the other
+Figure 2: Clustering of clauses using BERT
+Embedding
+Figure 3: Clustering of clauses using ContractBERT
+Embedding
+hand, CONTRACTBERT is able to cluster similar
+clause types closely while ensuring the separation
+between clauses of two different types.
+2.1 Clause Type Relevance Prediction
+Given a contract and a specific target clause type,
+the first stage involves predicting if the given type
+may be relevant to be added to the contract. We
+train binary classifiers for relevance prediction for
+each of the target clause types. Given an input
+contract, we obtain its CONTRACTBERT repre-
+sentation as shown in Figure 1. Since the number
+of tokens in the contracts are usually very large
+(≫512), we obtain the contextual representations
+of each of the clauses present and average their
+[CLS] embeddings to obtain the contract represen-
+tation ct_rep. This representation is fed as input to
+a binary classifier which is a small fully-connected
+neural network that is trained using binary cross
+entropy loss. We use a probability score of over
+0.5 as a positive prediction, i.e., the target clause
+type is relevant to the input contract.
+2.2 Clause Content Recommendation
+Once a target clause type is predicted as relevant,
+the next stage is to recommend clause content cor-
+responding to the given type for the contract. We
+model this as a sequence-to-sequence generation
+task, where the the input includes the given contract
+and clause label, and the output contains relevant
+clause content that may be added to the contract.
+We start with a transformer-based encoder-decoder
+architecture (Vaswani et al., 2017), follow (Liu
+and Lapata, 2019) and initialize our encoder with
+CONTRACTBERT. We then train the transformer
+decoder for generating clause content. As men-
+tioned above, the inputs for the encoder comprise
+of a contract and a target clause type.
+We calculate the representations of all possible
+clauses belonging to the given type in the dataset
+using CONTRACTBERT, and their [CLS] token’s
+embeddings are averaged, to obtain a target clause
+type representation trgt_cls_rep.This trgt_cls_rep
+and the contract representation ct_rep are averaged
+to obtain the encoding of the given contract and
+target clause type, which is used as input to the de-
+coder. Note that since CONTRACTBERT is already
+pre-trained on the contracts, we do not need to train
+the encoder again for clause generation. Given the
+average of the contract and target clause type repre-
+sentation as input, the decoder is trained to generate
+the appropriate clause belonging to the target type
+which might be relevant to the contract. Note that
+our generation method provides a single clause as
+recommendation. On the other hand, with retrieval-
+based methods, we can obtain multiple suggestions
+for a given clause type using similarity measures.
+3 Experiments and Evaluation
+We evaluate three methods for clause type rele-
+vance prediction + clause recommendation: (1)
+Binary classification + clause generation, which
+is our proposed approach; (2) Collaborating filter-
+ing + similarity-based retrieval; and (3) Document
+similarity + similarity-based retrieval.
+Collaborating filtering (CF) + similarity-based
+retrieval. Clause type relevance prediction can be
+seen as an item-item based CF task (Linden et al.,
+2003) with contracts as users and clause types as
+items. We construct a contract-clause type matrix,
+equivalent to the user-item matrix. If contract u
+contains clause type i, the cell (u, i) gets the value
+1, otherwise 0. We then compute the similarity
+between all the clause type pairs (i, j), using an
+adjusted cosine similarity, given by,
+sim(i, j) =
+U
+u (r(u,i)−
+¯
+ru)(r(u,j)−
+¯
+rj )
+U
+u r2
+(u,i)
+U
+u r2
+(u,j)
+(1)
+We obtain the item similarity matrix using this co-
+sine score, and use it to predict if a target clause
+type t is relevant to a given contract. We compute
+the score for t using the weighted sum of the score
+of the other similar clause types, given by,
+score(u, t) =
+I
+j sim(t, j)(r(u,j)−
+¯
+rj )
+I
+j sim(t, j) + ¯ rt
+(2)
+If t gets a high score and is not already present
+in the contract, it is recommended. We experiment
+with multiple thresholds above which a clause type
+may be recommended.
+Given a clause library containing all possi-
+ble clause types and their corresponding clauses,
+clause content recommendation can be seen as a
+similarity-based retrieval task. For a given con-
+tract and a target clause type t, we use ct_rep and
+trgt_cls_rep, and find cosine similarities with each
+of the clauses belonging to t to find the most similar
+clauses that may be relevant to the given contract.
+We do so by computing the similarity of either (i)
+ct_rep or (ii) (ct_rep + trgt_cls_rep)/2, with indi-
+vidual clause representations.
+Document similarity + similarity-based re-
+trieval. This is based on using similar documents
+to determine if a target clause type t can be rec-
+ommended for a given contract. The hypothesis is
+that similar contracts tend to have similar clause
+types. To find similar documents, we compute
+cosine similarities between the given contract’s rep-
+resentations ct_rep with those of all the contracts
+in the (training) dataset to identify the top k similar
+contracts. If t is present in any of the k similar con-
+tracts and is not present in the given contract, it is
+recommended as a relevant clause type to be added
+CLAUSE
+TYPE
+METHOD PREC. REC. ACC. F1
+Governing CF-based 0.5889 0.8166 0.6243 0.6843
+Laws Doc sim-based 0.7882 0.6225 0.7276 0.6957
+Binary classification 0.6898 0.7535 0.7082 0.7203
+Severability CF-based 0.6396 0.9091 0.6987 0.7509
+Doc sim-based 0.7156 0.8182 0.7467 0.7635
+Binary classification 0.7654 0.8042 0.7790 0.7843
+Notices CF-based 0.5533 0.8810 0.5885 0.6797
+Doc sim-based 0.7825 0.7257 0.7640 0.7530
+Binary classification 0.6850 0.7605 0.7079 0.7208
+Counterparts CF-based 0.6133 0.8899 0.6657 0.7262
+Doc sim-based 0.7156 0.8182 0.7467 0.7635
+Binary classification 0.7784 0.8259 0.7961 0.8014
+Entire CF-based 0.6197 0.8173 0.6591 0.7049
+Agreements Doc sim-based 0.9006 0.6623 0.7953 0.7633
+Binary classification 0.7480 0.8158 0.7713 0.7804
+Table 1: Clause type relevance prediction results.
+to the contract. We experiment with k ∈{1, 5}.
+Similarity-based retrieval for clause content recom-
+mendation is same as above.
+Metrics. We evaluate the performance of clause
+type relevance prediction using precision, recall,
+accuracy and F1-score metrics, and that of the
+clause content recommendation using ROUGE
+(Lin, 2004) score.
+Data. We use the LEDGAR dataset introduced
+by Tuggener et al. (2020). It contains contracts
+from the U.S. Securities and Exchange Commis-
+sion (SEC) filings website, and includes material
+contracts (Exhibit-10), such as shareholder agree-
+ments, employment agreements, etc. The dataset
+contains 12,608 clause types and 846,274 clauses
+from around 60,000 contracts. Further details on
+the dataset are provided in the appendix.
+Since this dataset can not be used for our work
+readily, we preprocess it to create proxy datasets
+for clause type relevance prediction and clause rec-
+ommendation tasks. For the former, for a target
+clause type t, we consider the labels relevant and
+not relevant for binary classification. For relevant
+class, we obtain contracts that contain a clause cor-
+responding to t, and remove this clause; given such
+a contract as input in which t is not present, the
+classifier is trained to predict t as relevant to be
+added to the contract. For the not relevant class,
+we randomly sample an equal number of contracts
+that do not contain t in them. For recommenda-
+tion, we use the contracts that contain t (i.e., the
+relevant class contracts); the inputs consist of the
+contract with the specific clause removed and t,
+and the output is the clause that is removed. For
+both the tasks, we partition these proxy datasets
+into train (60%), validation (20%) and test (20%)
+sets. These ground truth labels ({relevant, not rel-
+CLAUSE TYPE METHOD R-1 R-2 R-L
+Governing Sim-based (w/o cls_rep) 0.441 0.213 0.327
+Laws Sim-based (with cls_rep) 0.499 0.280 0.399
+Generation-based 0.567 0.395 0.506
+Severability Sim-based (w/o cls_rep) 0.419 0.142 0.269
+Sim-based (with cls_rep) 0.444 0.155 0.288
+Generation-based 0.521 0.264 0.432
+Notices Sim-based (w/o cls_rep) 0.341 0.085 0.207
+Sim-based (with cls_rep) 0.430 0.144 0.309
+Generation-based 0.514 0.271 0.422
+Counterparts Sim-based (w/o cls_rep) 0.466 0.214 0.406
+Sim-based (with cls_rep) 0.530 0.279 0.474
+Generation-based 0.666 0.495 0.667
+Entire Sim-based (w/o cls_rep) 0.433 0.183 0.306
+Agreements Sim-based (with cls_rep) 0.474 0.201 0.331
+Generation-based 0.535 0.312 0.485
+Table 2: Clause content recommendation results.
+evant} for the first task and the clause content for
+the second task) that we removed are used for eval-
+uation. The implementation details are provided in
+appendix.
+4 Results and Discussion
+Table 1 summarizes the results of the three methods
+(CF-based, document similarity-based and binary
+classification) for the clause type relevance predic-
+tion task. For the tasks, we report results on the
+thresholds, k and learning rate which gave best re-
+sults on the validation set (the ablation results are
+reported in the appendix).
+The CF-based method gives the best recall val-
+ues for all the clause types, while the precision,
+accuracy and F1 scores are worse compared to
+the other two methods. This method does not in-
+corporate any contextual information of the con-
+tract clause content and relies only on the presence
+or absence of clause types to predict if a target
+type is relevant, thus resulting in high recall and
+low precision and F1 scores. While the results of
+document similarity-based and classification meth-
+ods are comparable, both have merits and demer-
+its. While the document similarity-based method
+is simpler and more extensible than classification
+which requires training a new classifier for each
+new clause type, the former requires a large collec-
+tion of possible contracts to obtain decent results
+(particularly the recall values), which may not be
+available always. Further, the performance of docu-
+ment similarity method is dependent on k. This can
+be seen in the lower recall values for the document
+similarity method compared to those of classifica-
+tion. The storage costs associated with the contract
+collection can also become a bottleneck for the doc-
+ument similarity method. Also, currently there is
+no way to rank the clauses in the similar contracts,
+and hence its recommendations cannot be scoped,
+while in classification, the probability scores can
+be used to rank the clause types for relevance. On
+an average, the F1 scores for binary classification
+are highest compared to the other methods, while
+the accuracies are comparable with the document
+similarity method.
+Table 2 shows the results for clause content
+recommendation using similarity and generation-
+based methods. For the sim-based method, we use
+the clause with the highest similarity to compute
+ROUGE. The scores using only ct_rep are lower
+than those with trgt_cls_rep. This is expected as
+trgt_cls_rep adds further information on the clause
+type for which the appropriate clauses are to be
+retrieved. Finally, the generation-based method re-
+sults in the best scores for clause recommendation,
+thus indicating the usefulness of our proposed ap-
+proach for this task. Some qualitative examples
+using both the methods are provided in appendix.
+For clause content recommendation, we focused
+primarily on relevance (in terms of ROUGE). In
+general, retrieval-based frameworks, like the one
+we proposed, are mostly extractive in nature, and
+hence might be perceived as “safer” (or factual) to
+avoid any noise and vocabulary change in clauses
+that may be incorporated by generation methods,
+particularly in domains like legal. However, they
+can also end up retrieving clauses irrelevant to the
+contract context at times, as we note from their
+lower ROUGE scores, as retrieval is based on sim-
+ilarity heuristics which may not always capture
+relevance, while generation is trained to generate
+the specific missing clause in each contract.
+We also notice that generated clauses have lower
+linguistic variations in them, i.e., generated clauses
+belonging to one type often look alike. However,
+this is expected as most clauses look very simi-
+lar with only a few linguistic and content varia-
+tions. We believe because clauses have this repet-
+itive nature, there is a large untapped opportunity
+to leverage NLP methods for legal text generation
+while accounting for the nuances and factuality in
+them, to build more accurate clause recommenda-
+tion frameworks. We believe our work can provide
+a starting point for future works to build powerful
+models to capture the essence of legal text and aid
+in authoring them. In the future, we aim to focus
+on balancing the relevance and factuality of clauses
+recommended by our system.
+5 Conclusions
+We addressed AI-assisted authoring of con-
+tracts via clause recommendation. We proposed
+CLAUSEREC pipeline to predict clause types rele-
+vant to a contract and generate appropriate content
+for them based on the contract content. The results
+we get on comparing our approach with similarity-
+based heuristics and traditional filtering-based tech-
+niques are promising, indicating the viability of AI
+solutions to automate tasks for legal domain. Ef-
+forts in generating long contracts are still in their
+infancy and we hope our work can pave way for
+more research in this area.
+References
+Chandra Bhagavatula, Sergey Feldman, Russell Power,
+and Waleed Ammar. 2018. Content-based citation
+recommendation. In Proceedings of the 2018 Con-
+ference of the North American Chapter of the Asso-
+ciation for Computational Linguistics: Human Lan-
+guage Technologies, Volume 1 (Long Papers), pages
+238–251, New Orleans, Louisiana. Association for
+Computational Linguistics.
+Jacob Devlin, Ming-Wei Chang, Kenton Lee, and
+Kristina Toutanova. 2019. BERT: Pre-training of
+deep bidirectional transformers for language under-
+standing. In Proceedings of the 2019 Conference
+of the North American Chapter of the Association
+for Computational Linguistics: Human Language
+Technologies, Volume 1 (Long and Short Papers),
+pages 4171–4186, Minneapolis, Minnesota. Associ-
+ation for Computational Linguistics.
+Chin-Yew Lin. 2004. ROUGE: A package for auto-
+matic evaluation of summaries. In Text Summariza-
+tion Branches Out, pages 74–81, Barcelona, Spain.
+Association for Computational Linguistics.
+G. Linden, B. Smith, and J. York. 2003. Amazon.com
+recommendations: item-to-item collaborative filter-
+ing. IEEE Internet Computing, 7(1):76–80.
+Yang Liu and Mirella Lapata. 2019. Text summariza-
+tion with pretrained encoders.
+Itzik Malkiel, Oren Barkan, Avi Caciularu, Noam
+Razin, Ori Katz, and Noam Koenigstein. 2020. Re-
+coBERT: A catalog language model for text-based
+recommendations. In Findings of the Association
+for Computational Linguistics: EMNLP 2020, pages
+1704–1714, Online. Association for Computational
+Linguistics.
+Dan Simonson, Daniel Broderick, and Jonathan Herr.
+2019. The extent of repetition in contract language.
+In Proceedings of the Natural Legal Language Pro-
+cessing Workshop 2019, pages 21–30, Minneapolis,
+Minnesota. Association for Computational Linguis-
+tics.
+Figure 4: Some clause types in the LEDGAR dataset.
+Don Tuggener, Pius von Däniken, Thomas Peetz, and
+Mark Cieliebak. 2020. LEDGAR: A large-scale
+multi-label corpus for text classification of legal pro-
+visions in contracts. In Proceedings of the 12th Lan-
+guage Resources and Evaluation Conference, pages
+1235–1241, Marseille, France. European Language
+Resources Association.
+Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob
+Uszkoreit, Llion Jones, Aidan N. Gomez, Lukasz
+Kaiser, and Illia Polosukhin. 2017. Attention is all
+you need.
+Tian Wang and Yuyangzi Fu. 2020. Item-based col-
+laborative filtering with BERT. In Proceedings of
+The 3rd Workshop on e-Commerce and NLP, pages
+54–58, Seattle, WA, USA. Association for Computa-
+tional Linguistics.
+Appendix
+A Data
+Figure 4 shows some of the clause types present in
+the LEDGAR dataset.
+B Implementation Details
+To train CONTRACTBERT, we crawl and use a
+larger collection of 250k contracts and train it till
+the losses converge.
+B.1 Binary Classifiers
+We use a small 7-layered fully connected neural
+network with ReLU activation and dropout of 0.3
+as binary classifiers. The input is 768 dimensional
+contract representation and output is a probability
+score between [0, 1]. We use a batch-size of 64 and
+train them for 5000 epochs. We experiment with
+4 learning rates: [1e−5, 5e−6, 1e−6, 5e−7].
+Adam optimizer is used with Binary Cross Entropy
+Loss as criterion. The model with highest accu-
+racy on validation set is stored and the results are
+reported on a held out test set. The training takes
+around 150 minutes for each clause type.
+For document similarity method, we experi-
+mented with k = [1, 5] and for CF based method,
+we evaluated F-scores and accuracies for different
+threshold values and report the best results we got.
+Clause Label k-value threshold learning_rate
+Governing Law 1 0.27 5e−07
+Counterparts 2 0.18 1e−06
+Notices 2 0.15 5e−06
+Entire Agreements 1 0.20 1e−05
+Severability 3 0.13 1e−06
+Table 3: Implementation Details for Clause Type Pre-
+diction
+Table 3 summarizes the corresponding k values,
+thresholds and learningrates corresponding to
+the best results.
+B.2 Transformer Decoder
+The clause text is pre processed by removing punc-
+tuation, single letter words, and multiple spaces
+then using nltk’s word tokenizer 1 to tokenize the
+clause text. We keep the maximum generation
+length to be 400 including <SOS> and <EOS> to-
+kens. All the clauses with more than 398 tokens
+are discarded. The vocabulary is 7185 token long
+which is the output dimension. We use 3 decoder
+layers. The hidden dimension is 768 i.e., the length
+of input embedding. A dropout of 0.1 is used. A
+constant learning rate of 1e−05 is used with a
+batch size of 16 and the training takes place for 300
+epochs. Validation split of 0.2 is used. The results
+are reported on a held out test.
+C Qualitative Results
+Table 4 shows the qualitative results for a few
+clause types comparing the similarity-based re-
+trieval with generation-based methods. The
+ROUGE-1 F-scores are mentioned in the brack-
+ets to compare the results quantitatively as well.
+1https://www.nltk.org/
+CLAUSE TYPE CLAUSE
+Governing Laws
+Original Sim-based Generated This agreement and the obligations of the parties here under shall be governed by and construed and enforced in
+accordance with the substantive and procedural laws of the state of delaware without regard to rules on choice of law.
+This agreement shall be governed by and construed in accordance with the laws of the state of illinois without giving
+effect to the principles of conflicts of law rules the parties unconditionally and irrevocably consent to the exclusive
+jurisdiction of the courts located in the state of illinois and waive any objection with respect thereto for the purpose of
+any action suit or proceeding arising out of or relating to this agreement or the transactions contemplated hereby. (R1:
+0.456)
+This agreement shall be governed by and construed in accordance with the laws of the state of delaware without regard
+to the conflicts of law principles thereof. (R1: 0.718)
+Original Notices
+Sim-based Generated Any notices required or permitted to be given under this agreement shall be sufficient if in writing and if personally
+delivered or when sent by first class certified or registered mail postage prepaid return receipt requested in the case
+of the executive to his residence address as set forth in the books and records of the company and in the case of the
+company to the address of its principal place of business to such person or at such other address with respect to each
+party as such party shall notify the other in writing.
+Any notice required or permitted by this agreement shall be in writing and shall be delivered as follows with notice
+deemed given as indicated by personal delivery when delivered personally ii by overnight courier upon written verifica-
+tion of receipt iii by telecopy or facsimile transmission upon acknowledgment of receipt of electronic transmission or
+iv by certified or registered mail return receipt requested upon verification of receipt notice shall be sent to executive at
+the address listed on the company personnel records and to the company at its principal place of business or such other
+address as either party may specify in writing. (R1: 0.588)
+Any notice required or permitted to be given under this agreement shall be sufficient if in writing and if sent by
+registered or certified mail return receipt requested to executive at the last address the executive has filed in writing
+with the company or in the case of the company to its main offices attention of the board. (R1: 0.640)
+Original Severability
+Sim-based Generated If any term provision covenant or restriction of this agreement is held by court of competent jurisdiction to be invalid
+illegal void or unenforceable the remainder of the terms provisions covenants and restrictions set forth herein shall
+remain in full force and effect and shall in no way be affected impaired or invalidated and the parties hereto shall use
+their commercially reasonable efforts to find and employ an alternative means to achieve the same or substantially
+the same result as that contemplated bit/s]y such term provision covenant or restriction it is hereby stipulated and
+declared to be the intention of the parties that they would have executed the remaining terms provisions covenants and
+restrictions without including any of such that may be hereafter declared invalid illegal void or unenforceable.
+Each party hereto agrees that should any court or other competent authority hold any provision of this agreement or part
+of this agreement to be null void or unenforceablen the or order any party to take any action inconsistent herewith or
+not to take an action consistent with the terms of or required by this agreement the validity legality and or enforceability
+of the remaining provisions and obligations contained or set forth in this agreement shall not in any way be affected or
+impaired unless the foregoing inconsistent action or the failure to take an action constitutes material breach of this
+agreement or makes this agreement impossible to perform in which case this agreement shall terminate. (R1: 0.396)
+If any provision of this agreement is held to be invalid or unenforceable under present or future laws effective during
+the term hereof the term hereof the term or provisiagenton shall be fully severable and this agreement shall be construed
+and enforced as if such illegal invalid or unenforceable term or provision had never comprised part hereohim hf and
+the remaining terms hereof shall remain in full force and effect and shall not be affected by the illegal invalid or
+unenforceable term or provision or by the parties hereto shall negotiate in good faith substitute valid and enforceable
+provision that most nearly reflects the original intent of the parties and all other provisions hereof shall remain in full
+force and effect and shall be enforceable. (R1: 0.504)
+Original Counterparts
+Sim-based Generated This agreement may be executed in one or more counterparts each of which will constitute an original but all of which
+when taken together will constitute but one contract and will become effective as provided in section hereof delivery of
+an executed counterpart to this agreement by facsimile or other electronic transmission will be as effective as delivery
+of manually signed original.
+This agreement may be executed by the parties hereto in separate counterparts each of which when so executed and
+delivered shall be an original but all such counterparts shall together constitute one and the same agreement and all
+signatures need not appear on any one counterpart executed copies of the signature pages of this agreement sent by
+facsimile or transmitted electronically in portable document format or any similar format shall be treated as originals
+fully binding and with full legal force and effect and the parties waive any rights they may have to object to such
+treatment. (R1: 0.427)
+This agreement may be executed in any number of counterparts and by different parties hereto in separate counterparts
+each of which when so executed shall be deemed to be an original and all of which taken together shall constitute
+one and the same agreement delivery of an executed counterpart of signature page to this agreement by facsimile or
+other electronic imaging means shall be effective as delivery of manually executed counterpart of this agreement. (R1:
+0.603)
+Original Entire
+Agreements Sim-based Generated This agreement constitutes the entire agreement of the signing parties with respect to the subject matter hereof and
+supersedes all other understandings oral or written with respect to the subject matter hereof there are no oral or implied
+obligations of the control agent or the other lenders to any third party in connection with this agreement.
+This agreement consisting of sections through with schedules and the technology license agreement which is expressly
+incorporated by reference herein constitutes the entire understanding between the parties concerning the subject matter
+hereof and supersedes all prior discussions agreements and representations whether oral or written this agreement may
+be amended altered or modified only by an instrument in writing duly executed by the authorized representations of
+both parties. (R1: 0.435)
+This agreement and the other transaction documents constitute the entire agreement among the parties hereto with
+respect to the subject matter hereof and thereof and supersede all other prior agreements and understandings both
+written and oral among the parties or any of them with respect to the subject matter hereof. (R1: 0.626)
+Table 4: Qualitative comparison of retrieved and generated clauses
+</paper>
+<plan_files>
+<first_round_modifications>
+Revised Project Structure and Implementation Details:
+
+1. src/
+
+__init__.py
+
+No modification needed.
+
+2. src/data/
+
+__init__.py
+
+No modification needed.
+
+dataset.py
+
+LedgarDataset Class:
+
+__init__(self, data_dir: str, tokenizer_name: str = "bert-base-uncased"):
+
+Purpose: Initializes the dataset object.
+
+Implementation:
+
+self.data_dir = data_dir (e.g., "data/ledgar/"). Assumes a structured directory or a path to a JSON file.
+
+self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
+
+self.preprocessor = TextPreprocessor() Initialize the TextPreprocessor object.
+
+load_contracts(self, file_pattern: str = "*.json") -> List[Dict]:
+
+Purpose: Loads contracts from JSON files.
+
+Implementation:
+
+import json
+import glob
+
+contracts = []
+for filepath in glob.glob(os.path.join(self.data_dir, file_pattern)):
+    with open(filepath, 'r') as f:
+        contract_data = json.load(f)
+        contracts.append(contract_data)
+return contracts
+content_copy
+download
+Use code with caution.
+Python
+
+Assumes JSON structure:
+
+{
+  "id": "contract_id",
+  "text": "full contract text",
+  "clauses": [
+    {"text": "clause 1 text", "label": "clause_1_label"},
+    ...
+  ]
+}
+content_copy
+download
+Use code with caution.
+Json
+
+preprocess_text(self, text: str) -> str:
+
+Purpose: Preprocesses contract text (cleaning, normalization).
+
+Implementation:
+
+return self.preprocessor.preprocess(text)
+content_copy
+download
+Use code with caution.
+Python
+
+extract_clauses(self, contract_data: Dict) -> List[Dict]:
+
+Purpose: Extracts clauses and their labels from a contract.
+
+Implementation:
+
+return contract_data["clauses"]
+content_copy
+download
+Use code with caution.
+Python
+
+create_proxy_datasets(self, clause_types: List[str], train_ratio: float = 0.6, val_ratio: float = 0.2) -> Tuple[List[Dict], List[Dict], List[Dict]]:
+
+Purpose: Creates proxy datasets for training, validation, and testing for clause type relevance prediction.
+
+Implementation:
+
+from sklearn.model_selection import train_test_split
+import random
+
+train_data = []
+val_data = []
+test_data = []
+
+all_contracts = self.load_contracts()
+
+for clause_type in clause_types:
+    relevant_contracts = []
+    non_relevant_contracts = []
+
+    for contract in all_contracts:
+        has_clause = False
+        for clause in contract["clauses"]:
+            if clause["label"] == clause_type:
+                has_clause = True
+                # Create a new contract with the clause removed
+                new_contract = {
+                    "id": contract["id"],
+                    "text": contract["text"],  # You might want to remove the clause text from here too
+                    "clauses": [c for c in contract["clauses"] if c["label"] != clause_type],
+                    "label": clause_type  # Add the target clause type as a label
+                }
+                relevant_contracts.append(new_contract)
+                break
+        if not has_clause:
+            non_relevant_contracts.append(contract)
+
+    # Ensure we have the same number of relevant and non-relevant examples
+    random.shuffle(non_relevant_contracts)
+    non_relevant_contracts = non_relevant_contracts[:len(relevant_contracts)]
+
+    # Split into train, val, and test
+    train_rel, test_rel = train_test_split(relevant_contracts, test_size=1 - train_ratio, stratify=[c["label"] for c in relevant_contracts]) # added stratify
+    train_non_rel, test_non_rel = train_test_split(non_relevant_contracts, test_size=1 - train_ratio, stratify=[clause_type] * len(non_relevant_contracts)) # added stratify
+    val_rel, test_rel = train_test_split(test_rel, test_size=0.5, stratify=[c["label"] for c in test_rel]) # added stratify
+    val_non_rel, test_non_rel = train_test_split(test_non_rel, test_size=0.5, stratify=[clause_type] * len(test_non_rel)) # added stratify
+
+    train_data.extend(train_rel + train_non_rel)
+    val_data.extend(val_rel + val_non_rel)
+    test_data.extend(test_rel + test_non_rel)
+
+return train_data, val_data, test_data
+content_copy
+download
+Use code with caution.
+Python
+
+get_clause_embeddings(self, model, clauses: List[str]) -> torch.Tensor:
+
+Purpose: Gets embeddings for a list of clauses using the ContractBERT model.
+
+Implementation:
+
+encoded = model.encode_text(clauses, model.tokenizer)
+with torch.no_grad():
+     outputs = model(**encoded)
+return outputs.hidden_states[:, 0]  # Assuming you want the [CLS] token embedding
+content_copy
+download
+Use code with caution.
+Python
+
+tokenize_text(self, text: str) -> Dict:
+
+Purpose: Tokenizes text using the specified tokenizer.
+
+Implementation:
+
+return self.tokenizer(text, padding=True, truncation=True, max_length=512, return_tensors="pt")
+content_copy
+download
+Use code with caution.
+Python
+
+validate_data(self, data: Dict) -> bool:
+
+Purpose: Validates the format of the contract data.
+
+Implementation:
+
+if not all(key in data for key in ["id", "text", "clauses"]):
+    return False
+if not isinstance(data["clauses"], list):
+    return False
+for clause in data["clauses"]:
+    if not all(key in clause for key in ["text", "label"]):
+        return False
+return True
+content_copy
+download
+Use code with caution.
+Python
+
+create_contract_clause_matrix(self) -> np.ndarray:
+
+Purpose: Creates a matrix indicating the presence/absence of clause types in each contract.
+
+Implementation:
+
+all_contracts = self.load_contracts()
+all_clause_types = set()
+for contract in all_contracts:
+    for clause in contract["clauses"]:
+        all_clause_types.add(clause["label"])
+
+all_clause_types = sorted(list(all_clause_types))
+num_contracts = len(all_contracts)
+num_clause_types = len(all_clause_types)
+
+matrix = np.zeros((num_contracts, num_clause_types))
+
+for i, contract in enumerate(all_contracts):
+    for clause in contract["clauses"]:
+        j = all_clause_types.index(clause["label"])
+        matrix[i, j] = 1
+
+return matrix
+content_copy
+download
+Use code with caution.
+Python
+
+get_contract_representation(self, contract_text: str, model) -> torch.Tensor:
+
+Purpose: Gets the vector representation of a contract.
+
+Implementation:
+
+clauses = self.extract_clauses({"text": contract_text, "clauses": []}) # Assuming extract_clauses can handle this
+clause_embeddings = self.get_clause_embeddings(model, [c["text"] for c in clauses])
+return torch.mean(clause_embeddings, dim=0) # Average of clause embeddings
+content_copy
+download
+Use code with caution.
+Python
+
+get_clause_type_representation(self, clause_type: str, model) -> torch.Tensor:
+
+Purpose: Gets the vector representation of a clause type.
+
+Implementation:
+
+all_contracts = self.load_contracts()
+clause_texts = []
+for contract in all_contracts:
+    for clause in contract["clauses"]:
+        if clause["label"] == clause_type:
+            clause_texts.append(clause["text"])
+
+if not clause_texts:
+    return None # Handle cases where a clause type might not be present
+
+clause_embeddings = self.get_clause_embeddings(model, clause_texts)
+return torch.mean(clause_embeddings, dim=0)
+content_copy
+download
+Use code with caution.
+Python
+
+data_utils.py
+
+split_data(data: List[Any], train_ratio: float, val_ratio: float) -> Tuple[List[Any], List[Any], List[Any]]:
+
+Purpose: Splits data into train, validation, and test sets.
+
+Implementation:
+
+from sklearn.model_selection import train_test_split
+
+train_data, test_data = train_test_split(data, test_size=1 - train_ratio)
+val_data, test_data = train_test_split(test_data, test_size=0.5)
+return train_data, val_data, test_data
+content_copy
+download
+Use code with caution.
+Python
+
+3. src/models/
+
+__init__.py
+
+Update __all__ to include: ['ContractBERT', 'ClauseClassifier', 'ClauseGenerator', 'BinaryClassifier']
+
+contract_bert.py
+
+ContractBERT Class:
+
+__init__(self, model_name: str = "bert-base-uncased", num_labels: int = 2):
+
+Purpose: Initializes the ContractBERT model.
+
+Implementation:
+
+super().__init__()
+self.bert = BertModel.from_pretrained(model_name, output_hidden_states=True) # Ensure hidden states are output
+self.dropout = nn.Dropout(0.1)
+self.num_labels = num_labels # This will likely be updated per dataset/task
+self.classification_layer = nn.Linear(self.bert.config.hidden_size, num_labels) # For clause type classification
+self.clause_label_prediction_layer = nn.Linear(self.bert.config.hidden_size, num_labels) # For predicting if clause follows heading
+self.sentence_similarity_layer = nn.Linear(self.bert.config.hidden_size, 1) # For predicting if two sentences are from the same clause
+content_copy
+download
+Use code with caution.
+Python
+
+forward(self, input_ids: torch.Tensor, attention_mask: Optional[torch.Tensor] = None, labels: Optional[torch.Tensor] = None, clause_heading_labels: Optional[torch.Tensor] = None, sentence_pair_labels: Optional[torch.Tensor] = None) -> Dict[str, torch.Tensor]:
+
+Purpose: Defines the forward pass, including the two additional tasks.
+
+Implementation:
+
+outputs = self.bert(
+    input_ids=input_ids,
+    attention_mask=attention_mask
+)
+
+sequence_output = outputs.last_hidden_state # [batch_size, seq_len, hidden_size]
+pooled_output = outputs.pooler_output    # [batch_size, hidden_size]
+hidden_states = outputs.hidden_states
+
+# Clause type classification
+pooled_output = self.dropout(pooled_output)
+classification_logits = self.classification_layer(pooled_output)
+
+# Clause label prediction (assuming you pass [CLS] token output for this)
+cls_output = sequence_output[:, 0, :]  # Get the [CLS] token output
+clause_label_logits = self.clause_label_prediction_layer(cls_output)
+
+# Sentence similarity prediction (assuming you pass sentence pairs through the model)
+# You might need to adapt how you feed sentence pairs to the model
+sentence_pair_logits = self.sentence_similarity_layer(cls_output).squeeze(-1)
+
+loss = None
+if labels is not None:
+  loss_fct = nn.CrossEntropyLoss()
+  classification_loss = loss_fct(classification_logits.view(-1, self.num_labels), labels.view(-1))
+  loss = classification_loss
+
+if clause_heading_labels is not None:
+  loss_fct = nn.CrossEntropyLoss() # Or another appropriate loss
+  clause_label_loss = loss_fct(clause_label_logits.view(-1, self.num_labels), clause_heading_labels.view(-1))
+  if loss is not None:
+      loss += clause_label_loss
+  else:
+      loss = clause_label_loss
+
+if sentence_pair_labels is not None:
+  loss_fct = nn.BCEWithLogitsLoss()
+  sentence_similarity_loss = loss_fct(sentence_pair_logits, sentence_pair_labels.float())
+  if loss is not None:
+      loss += sentence_similarity_loss
+  else:
+      loss = sentence_similarity_loss
+
+return {
+    "loss": loss,
+    "classification_logits": classification_logits,
+    "clause_label_logits": clause_label_logits,
+    "sentence_similarity_logits": sentence_pair_logits,
+    "hidden_states": hidden_states
+}
+content_copy
+download
+Use code with caution.
+Python
+
+encode_text(self, text: str, tokenizer: BertTokenizer) -> Dict[str, torch.Tensor]:
+
+Purpose: Encodes text using the tokenizer.
+
+Implementation: No modification needed (correct).
+
+from_pretrained(cls, model_path: str) -> "ContractBERT":
+
+Purpose: Loads a pre-trained ContractBERT model.
+
+Implementation:
+
+model = cls() # Using default parameters
+model.load_state_dict(torch.load(model_path))
+return model
+content_copy
+download
+Use code with caution.
+Python
+
+save_pretrained(self, model_path: str) -> None:
+
+Purpose: Saves the model weights.
+
+Implementation:
+
+torch.save(self.state_dict(), model_path)
+content_copy
+download
+Use code with caution.
+Python
+
+clause_classifier.py
+
+ClauseClassifier Class:
+
+__init__(self, input_size: int, num_classes: int):
+
+Purpose: Initializes the clause classifier.
+
+Implementation:
+
+super().__init__()
+self.classifier = nn.Sequential(
+    nn.Linear(input_size, 512),
+    nn.ReLU(),
+    nn.Dropout(0.2),
+    nn.Linear(512, 128),
+    nn.ReLU(),
+    nn.Dropout(0.2),
+    nn.Linear(128, num_classes)
+)
+content_copy
+download
+Use code with caution.
+Python
+
+forward(self, x: torch.Tensor) -> torch.Tensor:
+
+Purpose: Forward pass through the classifier.
+
+Implementation: No modification needed.
+
+predict(self, x: torch.Tensor) -> torch.Tensor:
+
+Purpose: Gets class predictions.
+
+Implementation: No modification needed.
+
+predict_proba(self, x: torch.Tensor) -> torch.Tensor:
+
+Purpose: Gets class probabilities.
+
+Implementation: No modification needed.
+
+from_pretrained(cls, model_path: str) -> "ClauseClassifier":
+
+Purpose: Loads a pre-trained model.
+
+Implementation: No modification needed.
+
+save_pretrained(self, model_path: str) -> None:
+
+Purpose: Saves the model weights.
+
+Implementation: No modification needed.
+
+clause_generator.py
+
+ClauseGenerator Class:
+
+__init__(self, model_name: str = "gpt2"):
+
+Purpose: Initializes the clause generator.
+
+Implementation:
+
+super().__init__()
+self.model = GPT2LMHeadModel.from_pretrained(model_name)
+self.tokenizer = GPT2Tokenizer.from_pretrained(model_name)
+self.encoder = ContractBERT() # Encoder from ContractBERT
+self.decoder = nn.TransformerDecoder(
+    nn.TransformerDecoderLayer(d_model=768, nhead=12), # Assuming ContractBERT hidden size is 768
+    num_layers=6
+)
+content_copy
+download
+Use code with caution.
+Python
+
+forward(self, input_ids: torch.Tensor, attention_mask: Optional[torch.Tensor] = None, labels: Optional[torch.Tensor] = None, contract_representation: Optional[torch.Tensor] = None, clause_type_representation: Optional[torch.Tensor] = None) -> Dict[str, torch.Tensor]:
+
+Purpose: Defines the forward pass of the generator.
+
+Implementation:
+
+# Encode the contract and clause type
+encoded_representation = (contract_representation + clause_type_representation) / 2
+
+# Prepare input for decoder (add start token, etc.)
+# ...
+
+# Decode (you'll need to adapt this based on how you want to feed the encoded representation)
+decoder_output = self.decoder(
+    tgt=input_ids, # Assuming input_ids is the target sequence shifted right
+    memory=encoded_representation.unsqueeze(0) # Pass the encoded representation as memory
+)
+
+# Calculate logits
+logits = self.model.lm_head(decoder_output)
+
+loss = None
+if labels is not None:
+  loss_fct = nn.CrossEntropyLoss()
+  loss = loss_fct(logits.view(-1, self.tokenizer.vocab_size), labels.view(-1))
+
+return {
+    "loss": loss,
+    "logits": logits
+}
+content_copy
+download
+Use code with caution.
+Python
+
+generate_clause(self, prompt: str, max_length: int = 256, num_return_sequences: int = 1, temperature: float = 1.0, top_k: int = 50, top_p: float = 0.95) -> List[str]:
+
+Purpose: Generates clause text from a prompt.
+
+Implementation:
+
+inputs = self.tokenizer(prompt, return_tensors="pt", padding=True, truncation=True)
+outputs = self.model.generate(
+   inputs.input_ids,
+   attention_mask=inputs.attention_mask,
+   max_length=max_length,
+   num_return_sequences=num_return_sequences,
+   temperature=temperature,
+   top_k=top_k,
+   top_p=top_p,
+   do_sample=True,
+   pad_token_id=self.tokenizer.eos_token_id
+)
+generated_texts = []
+for output in outputs:
+   text = self.tokenizer.decode(output, skip_special_tokens=True)
+   generated_texts.append(text)
+return generated_texts
+content_copy
+download
+Use code with caution.
+Python
+
+from_pretrained(cls, model_path: str) -> "ClauseGenerator":
+
+Purpose: Loads a pre-trained model.
+
+Implementation: No modification needed.
+
+save_pretrained(self, model_path: str) -> None:
+
+Purpose: Saves the model weights.
+
+Implementation: No modification needed.
+
+binary_classifier.py
+
+BinaryClassifier Class:
+
+__init__(self, input_size: int):
+
+Purpose: Initializes the binary classifier.
+
+Implementation:
+
+super().__init__()
+self.classifier = nn.Sequential(
+    nn.Linear(input_size, 512),
+    nn.ReLU(),
+    nn.Dropout(0.2),
+    nn.Linear(512, 1),
+    nn.Sigmoid() # Output is a probability between 0 and 1
+)
+content_copy
+download
+Use code with caution.
+Python
+
+forward(self, x: torch.Tensor) -> torch.Tensor:
+
+Purpose: Forward pass through the binary classifier.
+
+Implementation:
+
+return self.classifier(x)
+content_copy
+download
+Use code with caution.
+Python
+
+predict(self, x: torch.Tensor) -> torch.Tensor:
+
+Purpose: Gets class predictions.
+
+Implementation:
+
+return (self.forward(x) > 0.5).float() # Threshold at 0.5 for binary classification
+content_copy
+download
+Use code with caution.
+Python
+
+predict_proba(self, x: torch.Tensor) -> torch.Tensor:
+
+Purpose: Gets class probabilities.
+
+Implementation:
+
+return self.forward(x)
+content_copy
+download
+Use code with caution.
+Python
+
+from_pretrained(cls, model_path: str) -> "BinaryClassifier":
+
+Purpose: Loads a pre-trained BinaryClassifier model.
+
+Implementation:
+
+model = cls(input_size=768) # You'll need to determine the input size
+model.load_state_dict(torch.load(model_path))
+return model
+content_copy
+download
+Use code with caution.
+Python
+
+save_pretrained(self, model_path: str) -> None:
+
+Purpose: Saves model weights.
+
+Implementation:
+
+torch.save(self.state_dict(), model_path)
+content_copy
+download
+Use code with caution.
+Python
+
+4. src/recommenders/
+
+__init__.py
+
+Update __all__ to include: ['CollaborativeFiltering', 'DocumentSimilarity', 'HybridRecommender']
+
+collaborative.py
+
+CollaborativeFiltering Class:
+
+__init__(self, n_factors: int = 100):
+
+Purpose: Initializes the collaborative filtering recommender.
+
+Implementation:
+
+self.n_factors = n_factors
+self.user_factors = None
+self.item_factors = None
+self.user_bias = None
+self.item_bias = None
+self.global_bias = None
+content_copy
+download
+Use code with caution.
+Python
+
+fit(self, ratings: np.ndarray) -> None:
+
+Purpose: Fits the collaborative filter to the ratings matrix.
+
+Implementation:
+
+# Initialize factors and biases randomly (consider using a better initialization strategy)
+n_users, n_items = ratings.shape
+self.user_factors = np.random.rand(n_users, self.n_factors)
+self.item_factors = np.random.rand(n_items, self.n_factors)
+self.user_bias = np.zeros(n_users)
+self.item_bias = np.zeros(n_items)
+self.global_bias = np.mean(ratings[ratings != 0])  # Mean of non-zero ratings
+
+# Implement alternating least squares or stochastic gradient descent to optimize factors and biases
+# ... (Optimization loop to update user_factors, item_factors, user_bias, item_bias)
+# Ensure to use adjusted cosine similarity during calculations
+
+# Example using stochastic gradient descent (you'll need to adapt this for adjusted cosine similarity)
+learning_rate = 0.01
+regularization = 0.02
+n_epochs = 10 # Example number of epochs
+
+for epoch in range(n_epochs):
+    for u in range(n_users):
+        for i in range(n_items):
+            if ratings[u, i] != 0:
+                # Calculate prediction and error
+                prediction = self.predict(u, i)
+                error = ratings[u, i] - prediction
+
+                # Update factors and biases
+                self.user_factors[u, :] += learning_rate * (error * self.item_factors[i, :] - regularization * self.user_factors[u, :])
+                self.item_factors[i, :] += learning_rate * (error * self.user_factors[u, :] - regularization * self.item_factors[i, :])
+                self.user_bias[u] += learning_rate * (error - regularization * self.user_bias[u])
+                self.item_bias[i] += learning_rate * (error - regularization * self.item_bias[i])
+content_copy
+download
+Use code with caution.
+Python
+
+predict(self, user_idx: int, item_idx: Optional[int] = None) -> np.ndarray:
+
+Purpose: Predicts the rating for a user-item pair or all items for a user.
+
+Implementation:
+
+if item_idx is None:
+    prediction = self.global_bias + self.user_bias[user_idx] + np.dot(self.user_factors[user_idx, :], self.item_factors.T) + self.item_bias
+else:
+    prediction = self.global_bias + self.user_bias[user_idx] + self.item_bias[item_idx] + np.dot(self.user_factors[user_idx, :], self.item_factors[item_idx, :])
+return prediction
+content_copy
+download
+Use code with caution.
+Python
+
+recommend(self, user_idx: int, n_items: int = 10) -> List[int]:
+
+Purpose: Recommends the top-N items for a user.
+
+Implementation:
+
+predictions = self.predict(user_idx)
+top_items = np.argsort(predictions)[::-1][:n_items]  # Indices of top-N items
+return top_items
+content_copy
+download
+Use code with caution.
+Python
+
+similar_items(self, item_idx: int, n_items: int = 10) -> List[int]:
+
+Purpose: Finds items similar to a given item.
+
+Implementation:
+
+# Compute adjusted cosine similarity between the item and all other items
+similarities = []
+for i in range(self.item_factors.shape[0]):
+    if i != item_idx:
+        sim = self._adjusted_cosine_similarity(item_idx, i)
+        similarities.append((sim, i))
+
+# Sort by similarity and get top-N
+similarities.sort(reverse=True)
+top_items = [i for sim, i in similarities[:n_items]]
+return top_items
+
+def _adjusted_cosine_similarity(self, item1_idx, item2_idx):
+    # Calculate adjusted cosine similarity as defined in the paper
+    # ... (Implementation of Equation 1)
+    # You'll need the ratings matrix and the means of item ratings here.
+    # Consider pre-calculating item means in the fit() method for efficiency
+    pass
+content_copy
+download
+Use code with caution.
+Python
+
+save(self, filepath: str) -> None:
+
+Purpose: Saves the model's parameters.
+
+Implementation:
+
+np.savez(filepath, user_factors=self.user_factors, item_factors=self.item_factors, user_bias=self.user_bias, item_bias=self.item_bias, global_bias=self.global_bias)
+content_copy
+download
+Use code with caution.
+Python
+
+load(cls, filepath: str) -> "CollaborativeFiltering":
+
+Purpose: Loads a saved model.
+
+Implementation:
+
+data = np.load(filepath)
+model = cls(n_factors=data['user_factors'].shape[1]) # Get n_factors from saved data
+model.user_factors = data['user_factors']
+model.item_factors = data['item_factors']
+model.user_bias = data['user_bias']
+model.item_bias = data['item_bias']
+model.global_bias = data['global_bias']
+return model
+content_copy
+download
+Use code with caution.
+Python
+
+similarity.py
+
+DocumentSimilarity Class:
+
+__init__(self, model_name: str = "bert-base-uncased"):
+
+Purpose: Initializes the document similarity recommender.
+
+Implementation:
+
+self.model = ContractBERT.from_pretrained(model_name) # You might want to load a fine-tuned ContractBERT model here
+self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+self.index = None
+self.documents = []
+content_copy
+download
+Use code with caution.
+Python
+
+_get_embeddings(self, texts: List[str]) -> np.ndarray:
+
+Purpose: Computes document embeddings.
+
+Implementation:
+
+encoded = self.tokenizer(texts, padding=True, truncation=True, max_length=512, return_tensors="pt")
+with torch.no_grad():
+    outputs = self.model(**encoded)
+embeddings = outputs.hidden_states[:, 0].detach().cpu().numpy() # Assuming you want the [CLS] token embedding
+return embeddings
+content_copy
+download
+Use code with caution.
+Python
+
+fit(self, documents: List[str]) -> None:
+
+Purpose: Builds the FAISS index.
+
+Implementation:
+
+self.documents = documents
+embeddings = self._get_embeddings(documents)
+dimension = embeddings.shape[1]
+self.index = faiss.IndexFlatIP(dimension) # Using inner product (for cosine similarity)
+faiss.normalize_L2(embeddings) # Normalize embeddings for cosine similarity
+self.index.add(embeddings)
+content_copy
+download
+Use code with caution.
+Python
+
+recommend(self, query: str, k: int = 10) -> List[Dict]:
+
+Purpose: Recommends similar documents.
+
+Implementation:
+
+query_emb = self._get_embeddings([query])
+faiss.normalize_L2(query_emb)
+scores, indices = self.index.search(query_emb, k)
+results = []
+for score, idx in zip(scores[0], indices[0]):
+    results.append({
+        "document": self.documents[idx],
+        "score": float(score)
+    })
+return results
+content_copy
+download
+Use code with caution.
+Python
+
+save(self, index_path: str) -> None:
+
+Purpose: Saves the FAISS index.
+
+Implementation:
+
+faiss.write_index(self.index, index_path)
+content_copy
+download
+Use code with caution.
+Python
+
+load(cls, index_path: str, documents: List[str], model_name: str = "bert-base-uncased") -> "DocumentSimilarity":
+
+Purpose: Loads a saved model.
+
+Implementation:
+
+recommender = cls(model_name=model_name)
+recommender.documents = documents
+recommender.index = faiss.read_index(index_path)
+return recommender
+content_copy
+download
+Use code with caution.
+Python
+
+hybrid_recommender.py
+
+HybridRecommender Class:
+
+__init__(self, contract_bert, binary_classifier, clause_generator, collaborative_filtering, document_similarity):
+
+Purpose: Initializes the hybrid recommender.
+
+Implementation:
+
+self.contract_bert = contract_bert
+self.binary_classifier = binary_classifier
+self.clause_generator = clause_generator
+self.collaborative_filtering = collaborative_filtering
+self.document_similarity = document_similarity
+content_copy
+download
+Use code with caution.
+Python
+
+recommend(self, contract_text: str, n_recommendations: int = 10) -> List[str]:
+
+Purpose: Generates recommendations using the hybrid approach.
+
+Implementation:
+
+# 1. Get contract representation
+contract_representation = self.contract_bert.encode_text(contract_text, self.contract_bert.tokenizer)
+
+# 2. Predict relevant clause types using the binary classifier
+with torch.no_grad():
+    clause_type_probabilities = self.binary_classifier.predict_proba(contract_representation)
+
+# Get top clause types (e.g., top 3)
+top_clause_type_indices = np.argsort(clause_type_probabilities.cpu().numpy())[0][::-1][:3]
+relevant_clause_types = [dataset.clause_types[i] for i in top_clause_type_indices] # Assuming you have a list of clause types in your dataset
+
+# 3. Generate recommendations for each relevant clause type
+recommendations = []
+for clause_type in relevant_clause_types:
+    # a) Use clause generator
+    clause_type_representation = self.dataset.get_clause_type_representation(clause_type, self.contract_bert) # You need to implement this in your dataset
+    generated_clause = self.clause_generator.generate_clause(
+        contract_representation=contract_representation,
+        clause_type_representation=clause_type_representation,
+        max_length=256 # Example max length
+    )[0] # Get the first generated clause
+    recommendations.append((generated_clause, "generated"))
+
+    # b) Use collaborative filtering (if applicable)
+    # You'll need to map clause types to item indices in your CF model
+    # ...
+
+    # c) Use document similarity
+    similar_clauses = self.document_similarity.recommend(contract_text, k=5) # Get top 5 similar clauses
+    for clause_info in similar_clauses:
+        recommendations.append((clause_info["document"], "similarity"))
+
+# 4. Rank and return top-N recommendations
+# You might want to rank based on generation scores,
+
+</first_round_modifications>
+<second_round_modifications>
+You are absolutely right! My apologies. I got carried away with providing details and didn't stick to the "plug-and-play" principle. I need to remove all placeholders and provide complete, working code snippets that you can directly use, with minimal modifications.
+
+Here's the revised response, focusing only on the necessary modifications, with complete code and no placeholders.
+
+Required Modifications (Complete Code, No Placeholders):
+
+src/data/dataset.py
+
+LedgarDataset Class:
+
+create_proxy_datasets method:
+
+import os
+import json
+from typing import List, Dict, Tuple, Any
+from sklearn.model_selection import train_test_split
+import random
+import torch
+from transformers import AutoTokenizer
+
+class LedgarDataset:
+     def __init__(self, data_dir: str, tokenizer_name: str = "bert-base-uncased"):
+        self.data_dir = data_dir
+        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
+        self.preprocessor = TextPreprocessor()
+        self.clause_types = self._get_all_clause_types()
+
+     def load_contracts(self, file_pattern: str = "*.json") -> List[Dict]:
+        contracts = []
+        for filepath in glob.glob(os.path.join(self.data_dir, file_pattern)):
+            with open(filepath, 'r') as f:
+                contract_data = json.load(f)
+                contracts.append(contract_data)
+        return contracts
+
+     def preprocess_text(self, text: str) -> str:
+        return self.preprocessor.preprocess(text)
+
+     def extract_clauses(self, contract_data: Dict) -> List[Dict]:
+         return contract_data["clauses"]
+
+     def create_proxy_datasets(self, clause_types: List[str], train_ratio: float = 0.6, val_ratio: float = 0.2) -> Tuple[List[Dict], List[Dict], List[Dict]]:
+        train_data = []
+        val_data = []
+        test_data = []
+
+        all_contracts = self.load_contracts()
+
+        for clause_type in clause_types:
+            relevant_contracts = []
+            non_relevant_contracts = []
+
+            for contract in all_contracts:
+                has_clause = False
+                for clause in contract["clauses"]:
+                    if clause["label"] == clause_type:
+                        has_clause = True
+                        # Create a new contract with the clause removed
+                        new_contract = {
+                            "id": contract["id"],
+                            "text": contract["text"],
+                            "clauses": [c for c in contract["clauses"] if c["label"] != clause_type],
+                            "label": clause_type
+                        }
+                        relevant_contracts.append(new_contract)
+                        break
+                if not has_clause:
+                    non_relevant_contracts.append(contract)
+
+            # Ensure we have the same number of relevant and non-relevant examples
+            random.shuffle(non_relevant_contracts)
+            non_relevant_contracts = non_relevant_contracts[:len(relevant_contracts)]
+
+            # Split into train, val, and test
+            train_rel, test_rel = train_test_split(relevant_contracts, test_size=1 - train_ratio, stratify=[c["label"] for c in relevant_contracts])
+            train_non_rel, test_non_rel = train_test_split(non_relevant_contracts, test_size=1 - train_ratio, stratify=[clause_type] * len(non_relevant_contracts))
+            val_rel, test_rel = train_test_split(test_rel, test_size=0.5, stratify=[c["label"] for c in test_rel])
+            val_non_rel, test_non_rel = train_test_split(test_non_rel, test_size=0.5, stratify=[clause_type] * len(test_non_rel))
+
+            train_data.extend(train_rel + train_non_rel)
+            val_data.extend(val_rel + val_non_rel)
+            test_data.extend(test_rel + test_non_rel)
+
+        return train_data, val_data, test_data
+     def get_clause_embeddings(self, model, clauses: List[str]) -> torch.Tensor:
+        encoded = model.encode_text(clauses, model.tokenizer)
+        with torch.no_grad():
+            outputs = model(**encoded)
+        return outputs.hidden_states[:, 0]
+
+     def tokenize_text(self, text: str) -> Dict:
+        return self.tokenizer(text, padding=True, truncation=True, max_length=512, return_tensors="pt")
+
+     def validate_data(self, data: Dict) -> bool:
+        if not all(key in data for key in ["id", "text", "clauses"]):
+            return False
+        if not isinstance(data["clauses"], list):
+            return False
+        for clause in data["clauses"]:
+            if not all(key in clause for key in ["text", "label"]):
+                return False
+        return True
+
+     def create_contract_clause_matrix(self) -> np.ndarray:
+        all_contracts = self.load_contracts()
+        all_clause_types = set()
+        for contract in all_contracts:
+            for clause in contract["clauses"]:
+               all_clause_types.add(clause["label"])
+
+        all_clause_types = sorted(list(all_clause_types))
+        num_contracts = len(all_contracts)
+        num_clause_types = len(all_clause_types)
+
+        matrix = np.zeros((num_contracts, num_clause_types))
+
+        for i, contract in enumerate(all_contracts):
+            for clause in contract["clauses"]:
+                 j = all_clause_types.index(clause["label"])
+                 matrix[i, j] = 1
+        return matrix
+
+     def get_contract_representation(self, contract_text: str, model) -> torch.Tensor:
+         clauses = self.extract_clauses({"text": contract_text, "clauses": []})
+         clause_embeddings = self.get_clause_embeddings(model, [c["text"] for c in clauses])
+         return torch.mean(clause_embeddings, dim=0)
+
+     def get_clause_type_representation(self, clause_type: str, model) -> torch.Tensor:
+        all_contracts = self.load_contracts()
+        clause_texts = []
+        for contract in all_contracts:
+            for clause in contract["clauses"]:
+                if clause["label"] == clause_type:
+                    clause_texts.append(clause["text"])
+        if not clause_texts:
+            return None
+        clause_embeddings = self.get_clause_embeddings(model, clause_texts)
+        return torch.mean(clause_embeddings, dim=0)
+     def _get_all_clause_types(self) -> List[str]:
+        all_contracts = self.load_contracts()
+        all_clause_types = set()
+        for contract in all_contracts:
+             for clause in contract["clauses"]:
+               all_clause_types.add(clause["label"])
+
+        return sorted(list(all_clause_types))
+Copy
+Ask Copilot
+content_copy
+download
+Use code with caution.
+Python
+
+src/models/contract_bert.py
+
+forward method:
+
+import torch
+import torch.nn as nn
+from typing import Dict, Optional
+from transformers import BertModel, BertTokenizer
+
+class ContractBERT(nn.Module):
+    def __init__(self, model_name: str = "bert-base-uncased", num_labels: int = 2):
+        super().__init__()
+        self.bert = BertModel.from_pretrained(model_name, output_hidden_states=True)
+        self.dropout = nn.Dropout(0.1)
+        self.num_labels = num_labels
+        self.classification_layer = nn.Linear(self.bert.config.hidden_size, num_labels)
+        self.clause_label_prediction_layer = nn.Linear(self.bert.config.hidden_size, num_labels)
+        self.sentence_similarity_layer = nn.Linear(self.bert.config.hidden_size, 1)
+
+    def forward(self, input_ids: torch.Tensor, attention_mask: Optional[torch.Tensor] = None, labels: Optional[torch.Tensor] = None, clause_heading_labels: Optional[torch.Tensor] = None, sentence_pair_labels: Optional[torch.Tensor] = None) -> Dict[str, torch.Tensor]:
+
+        outputs = self.bert(
+            input_ids=input_ids,
+            attention_mask=attention_mask
+        )
+
+        sequence_output = outputs.last_hidden_state
+        pooled_output = outputs.pooler_output
+        hidden_states = outputs.hidden_states
+
+        # Clause type classification
+        pooled_output = self.dropout(pooled_output)
+        classification_logits = self.classification_layer(pooled_output)
+
+        # Clause label prediction (assuming you pass [CLS] token output for this)
+        cls_output = sequence_output[:, 0, :]
+        clause_label_logits = self.clause_label_prediction_layer(cls_output)
+
+        # Sentence similarity prediction (assuming you pass sentence pairs through the model)
+        sentence_pair_logits = self.sentence_similarity_layer(cls_output).squeeze(-1)
+
+        loss = None
+        if labels is not None:
+            loss_fct = nn.CrossEntropyLoss()
+            classification_loss = loss_fct(classification_logits.view(-1, self.num_labels), labels.view(-1))
+            loss = classification_loss
+
+        if clause_heading_labels is not None:
+            loss_fct = nn.CrossEntropyLoss()
+            clause_label_loss = loss_fct(clause_label_logits.view(-1, self.num_labels), clause_heading_labels.view(-1))
+            if loss is not None:
+                loss += clause_label_loss
+            else:
+                loss = clause_label_loss
+
+        if sentence_pair_labels is not None:
+            loss_fct = nn.BCEWithLogitsLoss()
+            sentence_similarity_loss = loss_fct(sentence_pair_logits, sentence_pair_labels.float())
+            if loss is not None:
+                loss += sentence_similarity_loss
+            else:
+                loss = sentence_similarity_loss
+
+        return {
+            "loss": loss,
+            "classification_logits": classification_logits,
+            "clause_label_logits": clause_label_logits,
+            "sentence_similarity_logits": sentence_pair_logits,
+            "hidden_states": hidden_states
+        }
+
+    def encode_text(self, text: str, tokenizer: BertTokenizer) -> Dict[str, torch.Tensor]:
+        return tokenizer(text, padding=True, truncation=True, max_length=512, return_tensors="pt")
+
+    @classmethod
+    def from_pretrained(cls, model_path: str) -> "ContractBERT":
+        model = cls()
+        model.load_state_dict(torch.load(model_path))
+        return model
+
+    def save_pretrained(self, model_path: str) -> None:
+        torch.save(self.state_dict(), model_path)
+Copy
+Ask Copilot
+content_copy
+download
+Use code with caution.
+Python
+
+src/models/clause_generator.py
+
+__init__ method:
+
+import torch
+import torch.nn as nn
+from typing import Dict, Optional
+from transformers import GPT2LMHeadModel, GPT2Tokenizer
+
+class ClauseGenerator(nn.Module):
+    def __init__(self, model_name: str = "gpt2"):
+       super().__init__()
+       self.model = GPT2LMHeadModel.from_pretrained(model_name)
+       self.tokenizer = GPT2Tokenizer.from_pretrained(model_name)
+       self.encoder = ContractBERT() # Encoder from ContractBERT
+       self.decoder = nn.TransformerDecoder(
+           nn.TransformerDecoderLayer(d_model=768, nhead=12),
+           num_layers=6
+       )
+Copy
+Ask Copilot
+content_copy
+download
+Use code with caution.
+Python
+
+forward method:
+
+def forward(self, input_ids: torch.Tensor, attention_mask: Optional[torch.Tensor] = None, labels: Optional[torch.Tensor] = None, contract_representation: Optional[torch.Tensor] = None, clause_type_representation: Optional[torch.Tensor] = None) -> Dict[str, torch.Tensor]:
+    # Encode the contract and clause type
+    encoded_representation = (contract_representation + clause_type_representation) / 2
+
+    # Prepare input for decoder (add start token, etc.)
+    # ...
+
+    # Decode (you'll need to adapt this based on how you want to feed the encoded representation)
+    decoder_output = self.decoder(
+        tgt=input_ids, # Assuming input_ids is the target sequence shifted right
+        memory=encoded_representation.unsqueeze(0) # Pass the encoded representation as memory
+    )
+
+    # Calculate logits
+    logits = self.model.lm_head(decoder_output)
+
+    loss = None
+    if labels is not None:
+      loss_fct = nn.CrossEntropyLoss()
+      loss = loss_fct(logits.view(-1, self.tokenizer.vocab_size), labels.view(-1))
+
+    return {
+        "loss": loss,
+        "logits": logits
+    }
+Copy
+Ask Copilot
+content_copy
+download
+Use code with caution.
+Python
+
+src/models/binary_classifier.py
+
+__init__ method:
+
+import torch
+import torch.nn as nn
+class BinaryClassifier(nn.Module):
+    def __init__(self, input_size: int):
+        super().__init__()
+        self.classifier = nn.Sequential(
+            nn.Linear(input_size, 512),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+            nn.Linear(512, 1),
+            nn.Sigmoid()
+        )
+Copy
+Ask Copilot
+content_copy
+download
+Use code with caution.
+Python
+
+predict method:
+
+def predict(self, x: torch.Tensor) -> torch.Tensor:
+    return (self.forward(x) > 0.5).float()
+Copy
+Ask Copilot
+content_copy
+download
+Use code with caution.
+Python
+
+src/recommenders/collaborative_filtering.py
+
+fit method:
+
+import numpy as np
+
+class CollaborativeFiltering:
+   def __init__(self, n_factors: int = 100):
+        self.n_factors = n_factors
+        self.user_factors = None
+        self.item_factors = None
+        self.user_bias = None
+        self.item_bias = None
+        self.global_bias = None
+
+   def fit(self, ratings: np.ndarray) -> None:
+        # Initialize factors and biases randomly
+        n_users, n_items = ratings.shape
+        self.user_factors = np.random.rand(n_users, self.n_factors)
+        self.item_factors = np.random.rand(n_items, self.n_factors)
+        self.user_bias = np.zeros(n_users)
+        self.item_bias = np.zeros(n_items)
+        self.global_bias = np.mean(ratings[ratings != 0])  # Mean of non-zero ratings
+
+        # Implement stochastic gradient descent
+        learning_rate = 0.01
+        regularization = 0.02
+        n_epochs = 10  # Example number of epochs
+
+        for epoch in range(n_epochs):
+            for u in range(n_users):
+                for i in range(n_items):
+                    if ratings[u, i] != 0:
+                        # Calculate prediction and error
+                        prediction = self.predict(u, i)
+                        error = ratings[u, i] - prediction
+
+                        # Update factors and biases
+                        self.user_factors[u, :] += learning_rate * (error * self.item_factors[i, :] - regularization * self.user_factors[u, :])
+                        self.item_factors[i, :] += learning_rate * (error * self.user_factors[u, :] - regularization * self.item_factors[i, :])
+                        self.user_bias[u] += learning_rate * (error - regularization * self.user_bias[u])
+                        self.item_bias[i] += learning_rate * (error - regularization * self.item_bias[i])
+   def predict(self, user_idx: int, item_idx: Optional[int] = None) -> np.ndarray:
+        if item_idx is None:
+            prediction = self.global_bias + self.user_bias[user_idx] + np.dot(self.user_factors[user_idx, :], self.item_factors.T) + self.item_bias
+        else:
+            prediction = self.global_bias + self.user_bias[user_idx] + self.item_bias[item_idx] + np.dot(self.user_factors[user_idx, :], self.item_factors[item_idx, :])
+        return prediction
+
+   def recommend(self, user_idx: int, n_items: int = 10) -> List[int]:
+        predictions = self.predict(user_idx)
+        top_items = np.argsort(predictions)[::-1][:n_items]
+        return top_items
+
+   def similar_items(self, item_idx: int, n_items: int = 10) -> List[int]:
+        similarities = []
+        for i in range(self.item_factors.shape[0]):
+            if i != item_idx:
+                sim = self._adjusted_cosine_similarity(item_idx, i)
+                similarities.append((sim, i))
+
+        similarities.sort(reverse=True)
+        top_items = [i for sim, i in similarities[:n_items]]
+        return top_items
+
+   def _adjusted_cosine_similarity(self, item1_idx, item2_idx):
+        item1_mean = np.mean(self.item_factors[item1_idx, :])
+        item2_mean = np.mean(self.item_factors[item2_idx, :])
+        item1 = self.item_factors[item1_idx, :] - item1_mean
+        item2 = self.item_factors[item2_idx, :] - item2_mean
+        return np.dot(item1, item2) / (np.linalg.norm(item1) * np.linalg.norm(item2))
+
+
+   def save(self, filepath: str) -> None:
+       np.savez(filepath, user_factors=self.user_factors, item_factors=self.item_factors, user_bias=self.user_bias, item_bias=self.item_bias, global_bias=self.global_bias)
+   @classmethod
+   def load(cls, filepath: str) -> "CollaborativeFiltering":
+       data = np.load(filepath)
+       model = cls(n_factors=data['user_factors'].shape[1])
+       model.user_factors = data['user_factors']
+       model.item_factors = data['item_factors']
+       model.user_bias = data['user_bias']
+       model.item_bias = data['item_bias']
+       model.global_bias = data['global_bias']
+       return model
+Copy
+Ask Copilot
+content_copy
+download
+Use code with caution.
+Python
+
+_adjusted_cosine_similarity method: (added to the class)
+
+def _adjusted_cosine_similarity(self, item1_idx, item2_idx):
+      item1_mean = np.mean(self.item_factors[item1_idx, :])
+      item2_mean = np.mean(self.item_factors[item2_idx, :])
+      item1 = self.item_factors[item1_idx, :] - item1_mean
+      item2 = self.item_factors[item2_idx, :] - item2_mean
+      return np.dot(item1, item2) / (np.linalg.norm(item1) * np.linalg.norm(item2))
+Copy
+Ask Copilot
+content_copy
+download
+Use code with caution.
+Python
+
+src/recommenders/document_similarity.py
+
+_get_embeddings method:
+
+import torch
+import numpy as np
+import faiss
+from typing import List, Dict
+from transformers import AutoTokenizer
+from src.models.contract_bert import ContractBERT
+
+class DocumentSimilarity:
+    def __init__(self, model_name: str = "bert-base-uncased"):
+        self.model = ContractBERT.from_pretrained(model_name)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.index = None
+        self.documents = []
+
+    def _get_embeddings(self, texts: List[str]) -> np.ndarray:
+        encoded = self.tokenizer(texts, padding=True, truncation=True, max_length=512, return_tensors="pt")
+        with torch.no_grad():
+            outputs = self.model(**encoded)
+        embeddings = outputs.hidden_states[:, 0].detach().cpu().numpy()
+        return embeddings
+Copy
+Ask Copilot
+content_copy
+download
+Use code with caution.
+Python
+
+fit method:
+
+def fit(self, documents: List[str]) -> None:
+    self.documents = documents
+    embeddings = self._get_embeddings(documents)
+    dimension = embeddings.shape[1]
+    self.index = faiss.IndexFlatIP(dimension)
+    faiss.normalize_L2(embeddings)
+    self.index.add(embeddings)
+Copy
+Ask Copilot
+content_copy
+download
+Use code with caution.
+Python
+
+src/recommenders/hybrid_recommender.py
+
+__init__ method:
+
+class HybridRecommender:
+    def __init__(self, contract_bert, binary_classifier, clause_generator, collaborative_filtering, document_similarity):
+        self.contract_bert = contract_bert
+        self.binary_classifier = binary_classifier
+        self.clause_generator = clause_generator
+        self.collaborative_filtering = collaborative_filtering
+        self.document_similarity = document_similarity
+Copy
+Ask Copilot
+content_copy
+download
+Use code with caution.
+Python
+
+recommend method:
+
+def recommend(self, contract_text: str, n_recommendations: int = 10) -> List[str]:
+    encoded_text = self.contract_bert.encode_text(contract_text, self.contract_bert.tokenizer)
+    with torch.no_grad():
+        contract_representation = self.contract_bert(**encoded_text)["hidden_states"][:, 0]
+
+    # 2. Predict relevant clause types using the binary classifier
+    with torch.no_grad():
+        clause_type_probabilities = self.binary_classifier.predict_proba(contract_representation)
+
+    # Get top clause types (e.g., top 3)
+    top_clause_type_indices = np.argsort(clause_type_probabilities.cpu().numpy())[0][::-1][:3]
+    relevant_clause_types = [self.dataset.clause_types[i] for i in top_clause_type_indices] # Assuming you have a list of clause types in your dataset
+
+    # 3. Generate recommendations for each relevant clause type
+    recommendations = []
+    for clause_type in relevant_clause_types:
+        # a) Use clause generator
+        clause_type_representation = self.dataset.get_clause_type_representation(clause_type, self.contract_bert) # You need to implement this in your dataset
+        generated_clause = self.clause_generator.generate_clause(
+           contract_representation=contract_representation,
+           clause_type_representation=clause_type_representation,
+            max_length=256 # Example max length
+        )[0] # Get the first generated clause
+        recommendations.append((generated_clause, "generated"))
+
+        # b) Use collaborative filtering (if applicable)
+        # You'll need to map clause types to item indices in your CF model
+        # ...
+
+        # c) Use document similarity
+        similar_clauses = self.document_similarity.recommend(contract_text, k=5) # Get top 5 similar clauses
+        for clause_info in similar_clauses:
+            recommendations.append((clause_info["document"], "similarity"))
+
+    # 4. Rank and return top-N recommendations
+    # You might want to rank based on generation scores, collaborative filtering scores, or similarity scores, etc.
+    return [rec[0] for rec in recommendations][:n_recommendations] # For this example, I return the first n recommendations
+</second_round_modifications>
+<third_round_modifications>
+Code Review and Refinements:
+
+1. src/data/dataset.py
+
+LedgarDataset Class:
+
+_get_all_clause_types(self) -> List[str]:
+
+Purpose: Gets all unique clause types from the dataset
+
+Implementation:
+
+Correctly implemented and added. Efficiently gathers all unique clause types during initialization.
+
+create_proxy_datasets(...):
+
+Purpose: Create the training, validation, and test datasets for clause type relevance prediction
+
+Implementation:
+
+Correctly implemented the logic of separating contracts with and without the clause type and creating relevant and non-relevant datasets. The stratification is also implemented correctly.
+
+get_clause_embeddings(...):
+
+Purpose: Gets embeddings of clauses.
+
+Implementation:
+
+Minor change: Instead of returning outputs.hidden_states[:, 0], you should get the pooled output.
+
+def get_clause_embeddings(self, model, clauses: List[str]) -> torch.Tensor:
+    encoded = model.encode_text(clauses, model.tokenizer)
+    with torch.no_grad():
+        outputs = model(**encoded)
+    # Get the pooled output
+    return outputs.pooler_output
+content_copy
+download
+Use code with caution.
+Python
+
+get_contract_representation(...):
+
+Purpose: Gets the vector representation of a contract (average of clause embeddings).
+
+Implementation:
+
+Minor change: You are passing an empty clauses list to extract_clauses. You should pass contract_data["clauses"] to extract the clauses correctly.
+
+Minor change: get_clause_embeddings now returns the pooled output, not the hidden states.
+
+def get_contract_representation(self, contract_text: str, model) -> torch.Tensor:
+    contract_data = {"text": contract_text, "clauses": []}
+    clauses = self.extract_clauses(contract_data)
+    clause_texts = [c["text"] for c in clauses if "text" in c]
+    clause_embeddings = self.get_clause_embeddings(model, clause_texts)
+    return torch.mean(clause_embeddings, dim=0)
+content_copy
+download
+Use code with caution.
+Python
+
+get_clause_type_representation(...):
+
+Purpose: Gets the vector representation of a clause type (average of embeddings of clauses of that type).
+
+Implementation:
+
+Correctly implemented.
+
+2. src/models/contract_bert.py
+
+ContractBERT Class:
+
+forward(...):
+
+Purpose: Defines the forward pass of the ContractBERT model, including the additional tasks.
+
+Implementation:
+
+Correctly implemented.
+
+3. src/models/clause_generator.py
+
+ClauseGenerator Class:
+
+__init__(...):
+
+Purpose: Initializes the clause generator.
+
+Implementation:
+
+Correctly implemented.
+
+forward(...):
+
+Purpose: Defines the forward pass of the clause generator.
+
+Implementation:
+
+Correctness: The logic is mostly correct. You're passing the encoded representation as memory to the decoder.
+
+Suggestion: Add more comments to the forward function to clarify the shapes and flow of tensors.
+
+4. src/models/binary_classifier.py
+
+BinaryClassifier Class:
+
+__init__(...):
+
+Purpose: Initializes the binary classifier
+
+Implementation:
+
+Correctly implemented.
+
+predict(...):
+
+Purpose: Gets class predictions (0 or 1).
+
+Implementation:
+
+Correctly implemented.
+
+5. src/recommenders/collaborative.py
+
+CollaborativeFiltering Class:
+
+fit(...):
+
+Purpose: Trains the collaborative filtering model.
+
+Implementation:
+
+Correctness: The stochastic gradient descent implementation is a good starting point.
+
+Improvement: Add adjusted cosine similarity calculation. You need to incorporate the adjusted cosine similarity formula (Equation 1 in the paper) into the training process, either by modifying the update rules or by using a different optimization method that can handle it directly.
+
+def fit(self, ratings: np.ndarray) -> None:
+    # ... (Initialization as before)
+
+    # Pre-compute user means for adjusted cosine similarity
+    self.user_means = np.zeros(n_users)
+    for u in range(n_users):
+        rated_items = ratings[u, :] != 0
+        if np.any(rated_items):
+            self.user_means[u] = np.mean(ratings[u, rated_items])
+        else:
+            self.user_means[u] = 0 # Or global_bias, or some other default
+
+    # Implement stochastic gradient descent
+    learning_rate = 0.01
+    regularization = 0.02
+    n_epochs = 10  # Example number of epochs
+
+    for epoch in range(n_epochs):
+        for u in range(n_users):
+            for i in range(n_items):
+                if ratings[u, i] != 0:
+                    # Calculate prediction and error using adjusted ratings
+                    prediction = self.predict(u, i)
+                    error = ratings[u, i] - prediction
+
+                    # Update factors and biases
+                    # Adjust for user means to account for adjusted cosine similarity
+                    self.user_factors[u, :] += learning_rate * (error * (self.item_factors[i, :] + self.user_means[u]) - regularization * self.user_factors[u, :])
+                    self.item_factors[i, :] += learning_rate * (error * (self.user_factors[u, :] + self.item_bias[i]) - regularization * self.item_factors[i, :])
+                    self.user_bias[u] += learning_rate * (error - regularization * self.user_bias[u])
+                    self.item_bias[i] += learning_rate * (error - regularization * self.item_bias[i])
+content_copy
+download
+Use code with caution.
+Python
+
+predict(...):
+* Purpose: Predict the rating.
+* Implementation:
+* Correctly implemented.
+
+recommend(...):
+
+Purpose: Recommend top-N items
+
+Implementation:
+
+Correctly implemented.
+
+*   `similar_items(...)`:
+    *   **Purpose:** Finds similar items (clause types).
+    *   **Implementation:**
+        *   **Correctness:** The overall logic is correct.
+        *   **Improvement: Implement the `_adjusted_cosine_similarity` function according to the paper's formula.** You need to use the user-item rating matrix to calculate the adjusted cosine similarity correctly.
+        *   **Suggestion:** Pre-compute item means in the `fit()` method to avoid recalculating them repeatedly.
+
+        ```python
+        def _adjusted_cosine_similarity(self, item1_idx, item2_idx):
+            # Get users who rated both items
+            rated_users_item1 = self.ratings[:, item1_idx] != 0
+            rated_users_item2 = self.ratings[:, item2_idx] != 0
+            common_users = np.logical_and(rated_users_item1, rated_users_item2)
+
+            if not np.any(common_users):
+              return 0  # No common users, similarity is 0
+
+            # Calculate adjusted ratings
+            item1_ratings = self.ratings[common_users, item1_idx] - self.user_means[common_users]
+            item2_ratings = self.ratings[common_users, item2_idx] - self.user_means[common_users]
+
+            # Calculate adjusted cosine similarity
+            numerator = np.dot(item1_ratings, item2_ratings)
+            denominator = np.linalg.norm(item1_ratings) * np.linalg.norm(item2_ratings)
+
+            if denominator == 0:
+                return 0  # Avoid division by zero
+            else:
+                return numerator / denominator
+        ```
+content_copy
+download
+Use code with caution.
+
+6. src/recommenders/document_similarity.py
+
+DocumentSimilarity Class:
+
+_get_embeddings(...):
+
+Purpose: Computes document embeddings.
+
+Implementation:
+
+Minor change: As before, you should use the pooled output instead of the hidden states. Also, remove the self.model and use the one on the function (get_clause_embeddings).
+
+def _get_embeddings(self, texts: List[str], model) -> np.ndarray:
+    encoded = self.tokenizer(texts, padding=True, truncation=True, max_length=512, return_tensors="pt")
+    with torch.no_grad():
+        outputs = model(**encoded)
+    embeddings = outputs.pooler_output.detach().cpu().numpy()
+    return embeddings
+content_copy
+download
+Use code with caution.
+Python
+
+Minor change: Use the _get_embeddings method on the fit function.
+
+def fit(self, documents: List[str], model) -> None:
+    self.documents = documents
+    embeddings = self._get_embeddings(documents, model)
+    dimension = embeddings.shape[1]
+    self.index = faiss.IndexFlatIP(dimension)
+    faiss.normalize_L2(embeddings)
+    self.index.add(embeddings)
+content_copy
+download
+Use code with caution.
+Python
+
+7. src/recommenders/hybrid_recommender.py
+
+HybridRecommender Class:
+
+__init__(...):
+
+Purpose: Initializes the hybrid recommender.
+
+Implementation:
+
+Correctly implemented.
+
+recommend(...):
+
+Purpose: Generates recommendations using the hybrid approach.
+
+Implementation:
+
+Major change: You are not passing the model to the get_contract_representation function.
+
+Major change: You are not passing the model to the get_clause_type_representation function.
+
+Major change: You are not passing the model to the fit method of the DocumentSimilarity class.
+
+Major change: The binary_classifier is expecting the contract representation to have a batch size, so you need to add a dimension to it. Also, the output has one dimension, and to get the indices you need to remove it.
+
+Major change: You need to add the dataset to the HybridRecommender class, as it is used in this function.
+
+Minor change: You are not using the n_recommendations parameter.
+
+Minor change: You are returning the recommendations without ranking them.
+
+def recommend(self, contract_text: str, n_recommendations: int = 10) -> List[str]:
+    # 1. Get contract representation
+    with torch.no_grad():
+        contract_representation = self.dataset.get_contract_representation(contract_text, self.contract_bert).unsqueeze(0)
+
+    # 2. Predict relevant clause types using the binary classifier
+    with torch.no_grad():
+        clause_type_probabilities = self.binary_classifier.predict_proba(contract_representation).squeeze(0)
+
+    # Get top clause types (e.g., top 3)
+    top_clause_type_indices = np.argsort(clause_type_probabilities.cpu().numpy())[::-1][:3]
+
+    relevant_clause_types = [self.dataset.clause_types[i] for i in top_clause_type_indices]
+
+    # 3. Generate recommendations for each relevant clause type
+    recommendations = []
+    for clause_type in relevant_clause_types:
+        # a) Use clause generator
+        clause_type_representation = self.dataset.get_clause_type_representation(clause_type, self.contract_bert)
+        if clause_type_representation is not None:
+             clause_type_representation = clause_type_representation.unsqueeze(0)
+             generated_clause = self.clause_generator.generate_clause(
+                 contract_representation=contract_representation,
+                 clause_type_representation=clause_type_representation,
+                 max_length=256 # Example max length
+             )[0]
+             recommendations.append((generated_clause, "generated", 0)) # Add a score of 0 for generated clauses
+
+        # c) Use document similarity
+        similar_clauses = self.document_similarity.recommend(contract_text, k=5)
+        for clause_info in similar_clauses:
+            recommendations.append((clause_info["document"], "similarity", clause_info["score"]))
+
+    # 4. Rank recommendations by score (higher score is better) and return top-N
+    recommendations.sort(key=lambda x: x[2], reverse=True)
+    return [rec[0] for rec in recommendations][:n_recommendations]
+content_copy
+download
+Use code with caution.
+Python
+
+8. src/utils/evaluation.py
+* Evaluation Class:
+
+```python
+    from typing import Dict, List
+    import numpy as np
+    from src.utils.metrics import (
+        compute_classification_metrics,
+        compute_similarity_metrics,
+        compute_generation_metrics,
+    )
+
+    class Evaluation:
+        def evaluate_classification(
+            self, y_true: List[int], y_pred: List[int], labels: List[str]
+        ) -> Dict[str, any]:
+            """
+            Evaluates clause type classification.
+
+            Args:
+                y_true: True labels.
+                y_pred: Predicted labels.
+                labels: List of label names.
+
+            Returns:
+                Dictionary of classification metrics.
+            """
+            return compute_classification_metrics(y_true, y_pred, labels)
+
+        def evaluate_retrieval(
+            self, similarities: List[float], relevance: List[int], k: int
+        ) -> Dict[str, float]:
+            """
+            Evaluates clause retrieval.
+
+            Args:
+                similarities: List of similarity scores.
+                relevance: Binary relevance labels.
+                k: Cutoff for top-k metrics.
+
+            Returns:
+                Dictionary of retrieval metrics.
+            """
+            return compute_similarity_metrics(similarities, relevance, k)
+
+        def evaluate_generation(
+            self, references: List[str], hypotheses: List[str]
+        ) -> Dict[str, float]:
+            """
+            Evaluates clause generation.
+
+            Args:
+                references: Reference texts.
+                hypotheses: Generated texts.
+
+            Returns:
+                Dictionary of generation metrics.
+            """
+            return compute_generation_metrics(references, hypotheses)
+    ```
+content_copy
+download
+Use code with caution.
+
+9. src/utils/preprocessing.py
+
+TextPreprocessor Class:
+
+Correctly implemented
+
+10. src/utils/metrics.py
+
+Correctly implemented
+
+11. src/trainers/
+
+contract_bert_trainer.py
+
+import torch
+from typing import Dict, Callable
+from torch.utils.data import DataLoader
+from tqdm import tqdm
+from src.utils.evaluation import Evaluation
+
+class ContractBERTTrainer:
+    def __init__(
+        self,
+        model: torch.nn.Module,
+        optimizer: torch.optim.Optimizer,
+        scheduler: torch.optim.lr_scheduler._LRScheduler,
+        device: torch.device,
+        loss_fn: Callable = None, # Add a loss function
+        evaluation: Evaluation = None
+    ):
+        self.model = model
+        self.optimizer = optimizer
+        self.scheduler = scheduler
+        self.device = device
+        self.loss_fn = loss_fn
+        self.evaluation = evaluation
+
+    def train_step(self, batch: Dict[str, torch.Tensor]) -> Dict[str, float]:
+        self.model.train()
+        input_ids = batch["input_ids"].to(self.device)
+        attention_mask = batch["attention_mask"].to(self.device)
+        labels = batch["labels"].to(self.device)  # Assuming you have labels in your batch
+
+        outputs = self.model(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            labels=labels
+        )
+
+        loss = outputs["loss"]
+
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+
+        return {"loss": loss.item()}
+
+    def eval_step(self, batch: Dict[str, torch.Tensor]) -> Dict[str, float]:
+        self.model.eval()
+        input_ids = batch["input_ids"].to(self.device)
+        attention_mask = batch["attention_mask"].to(self.device)
+        labels = batch["labels"].to(self.device)
+
+        with torch.no_grad():
+            outputs = self.model(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                labels=labels
+            )
+
+        loss = outputs["loss"]
+
+        return {"loss": loss.item(), "logits": outputs["logits"], "labels": labels}
+
+    def train(self, train_dataloader: DataLoader, val_dataloader: DataLoader, num_epochs: int, eval_steps: int = 100, save_path: str = None):
+        for epoch in range(num_epochs):
+            print(f"Epoch {epoch + 1}/{num_epochs}")
+            train_metrics = self.train_epoch(train_dataloader, epoch)
+
+            if (epoch + 1) % eval_steps == 0:
+                val_metrics = self.validate(val_dataloader)
+
+                # Print or log the evaluation metrics
+                print(f"Validation Loss: {val_metrics['loss']:.4f}")
+                if self.evaluation:
+                     # Assuming your labels are integers from 0 to num_classes-1
+                    classification_metrics = self.evaluation.evaluate_classification(
+                       y_true=val_metrics["labels"].cpu().numpy(),
+                       y_pred=val_metrics["logits"].argmax(dim=-1).cpu().numpy(),
+                       labels=[i for i in range(self.model.num_labels)]
+                    )
+                    print(f"Classification Metrics: {classification_metrics}")
+                self.scheduler.step()
+            # Save model
+            if save_path is not None:
+               torch.save(self.model.state_dict(), save_path)
+    def train_epoch(self, dataloader: DataLoader, epoch: int) -> Dict[str, float]:
+        total_loss = 0.0
+        num_batches = len(dataloader)
+        progress_bar = tqdm(enumerate(dataloader), total=num_batches, desc=f"Epoch {epoch + 1}")
+
+        for batch_idx, batch in progress_bar:
+            metrics = self.train_step(batch)
+            total_loss += metrics["loss"]
+
+            # Update progress bar description with current loss
+            progress_bar.set_postfix({"loss": f"{metrics['loss']:.4f}"})
+
+        avg_loss = total_loss / num_batches
+        return {"loss": avg_loss}
+    def validate(self, dataloader: DataLoader) -> Dict[str, float]:
+        total_loss = 0.0
+        num_batches = len(dataloader)
+        all_logits = []
+        all_labels = []
+
+        with torch.no_grad():
+            for batch_idx, batch in enumerate(dataloader):
+                metrics = self.eval_step(batch)
+                total_loss += metrics["loss"]
+                all_logits.append(metrics["logits"])
+                all_labels.append(metrics["labels"])
+
+        avg_loss = total_loss / num_batches
+        return {
+            "loss": avg_loss,
+            "logits": torch.cat(all_logits, dim=0),
+            "labels": torch.cat(all_labels, dim=0)
+        }
+content_copy
+download
+Use code with caution.
+Python
+
+classifier_trainer.py
+
+import torch
+from typing import Dict, Callable
+from torch.utils.data import DataLoader
+from tqdm import tqdm
+from src.utils.evaluation import Evaluation
+
+class ClassifierTrainer:
+    def __init__(
+        self,
+        model: torch.nn.Module,
+        optimizer: torch.optim.Optimizer,
+        scheduler: torch.optim.lr_scheduler._LRScheduler,
+        device: torch.device,
+        loss_fn: Callable = None, # Add a loss function
+        evaluation: Evaluation = None # Add evaluation object
+    ):
+        self.model = model
+        self.optimizer = optimizer
+        self.scheduler = scheduler
+        self.device = device
+        self.loss_fn = loss_fn or torch.nn.CrossEntropyLoss() # Default loss function
+        self.evaluation = evaluation
+
+    def train_step(self, batch: Dict[str, torch.Tensor]) -> Dict[str, float]:
+        self.model.train()
+        inputs = batch["inputs"].to(self.device) # Assuming your batch has "inputs" and "labels"
+        labels = batch["labels"].to(self.device)
+
+        outputs = self.model(inputs)
+        loss = self.loss_fn(outputs, labels)
+
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+
+        return {"loss": loss.item()}
+
+    def eval_step(self, batch: Dict[str, torch.Tensor]) -> Dict[str, float]:
+        self.model.eval()
+        inputs = batch["inputs"].to(self.device)
+        labels = batch["labels"].to(self.device)
+
+        with torch.no_grad():
+            outputs = self.model(inputs)
+            loss = self.loss_fn(outputs, labels)
+
+        return {"loss": loss.item(), "logits": outputs, "labels": labels}
+
+    def train(self, train_dataloader: DataLoader, val_dataloader: DataLoader, num_epochs: int, eval_steps: int = 100, save_path: str = None):
+        for epoch in range(num_epochs):
+            print(f"Epoch {epoch + 1}/{num_epochs}")
+            train_metrics = self.train_epoch(train_dataloader, epoch)
+
+            if (epoch + 1) % eval_steps == 0:
+                val_metrics = self.validate(val_dataloader)
+
+                # Print or log the evaluation metrics
+                print(f"Validation Loss: {val_metrics['loss']:.4f}")
+                if self.evaluation:
+                    classification_metrics = self.evaluation.evaluate_classification(
+                        y_true=val_metrics["labels"].cpu().numpy(),
+                        y_pred=val_metrics["logits"].argmax(dim=-1).cpu().numpy(),
+                        labels=[0, 1] # Assuming binary classification
+                    )
+                    print(f"Classification Metrics: {classification_metrics}")
+
+            if save_path is not None:
+                self.model.save_pretrained(save_path)
+            self.scheduler.step()
+    def train_epoch(self, dataloader: DataLoader, epoch: int) -> Dict[str, float]:
+        total_loss = 0.0
+        num_batches = len(dataloader)
+        progress_bar = tqdm(enumerate(dataloader), total=num_batches, desc=f"Epoch {epoch + 1}")
+
+        for batch_idx, batch in progress_bar:
+            metrics = self.train_step(batch)
+            total_loss += metrics["loss"]
+
+            # Update progress bar description with current loss
+            progress_bar.set_postfix({"loss": f"{metrics['loss']:.4f}"})
+
+        avg_loss = total_loss / num_batches
+        return {"loss": avg_loss}
+
+    def validate(self, dataloader: DataLoader) -> Dict[str, float]:
+        total_loss = 0.0
+        num_batches = len(dataloader)
+        all_logits = []
+        all_labels = []
+
+        with torch.no_grad():
+            for batch_idx, batch in enumerate(dataloader):
+                metrics = self.eval_step(batch)
+                total_loss += metrics["loss"]
+                all_logits.append(metrics["logits"])
+                all_labels.append(metrics["labels"])
+
+        avg_loss = total_loss / num_batches
+        return {
+            "loss": avg_loss,
+            "logits": torch.cat(all_logits, dim=0),
+            "labels": torch.cat(all_labels, dim=0)
+        }
+content_copy
+download
+Use code with caution.
+Python
+
+generator_trainer.py
+
+import torch
+from typing import Dict, Callable
+from torch.utils.data import DataLoader
+from tqdm import tqdm
+from src.utils.evaluation import Evaluation
+
+class GeneratorTrainer:
+    def __init__(
+        self,
+        model: torch.nn.Module,
+        optimizer: torch.optim.Optimizer,
+        scheduler: torch.optim.lr_scheduler._LRScheduler,
+        device: torch.device,
+        loss_fn: Callable = None,
+        evaluation: Evaluation = None
+    ):
+        self.model = model
+        self.optimizer = optimizer
+        self.scheduler = scheduler
+        self.device = device
+        self.loss_fn = loss_fn or torch.nn.CrossEntropyLoss() # You can define a more specific loss if needed
+        self.evaluation = evaluation
+
+    def train_step(self, batch: Dict[str, torch.Tensor]) -> Dict[str, float]:
+        self.model.train()
+        input_ids = batch["input_ids"].to(self.device)
+        attention_mask = batch["attention_mask"].to(self.device)
+        labels = batch["labels"].to(self.device)
+        contract_representation = batch["contract_representation"].to(self.device)
+        clause_type_representation = batch["clause_type_representation"].to(self.device)
+
+        outputs = self.model(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            labels=labels,
+            contract_representation=contract_representation,
+            clause_type_representation=clause_type_representation
+        )
+
+        loss = outputs["loss"]
+
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+
+        return {"loss": loss.item()}
+
+    def eval_step(self, batch: Dict[str, torch.Tensor]) -> Dict[str, float]:
+        self.model.eval()
+        input_ids = batch["input_ids"].to(self.device)
+        attention_mask = batch["attention_mask"].to(self.device)
+        labels = batch["labels"].to(self.device)
+        contract_representation = batch["contract_representation"].to(self.device)
+        clause_type_representation = batch["clause_type_representation"].to(self.device)
+
+        with torch.no_grad():
+            outputs = self.model(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                labels=labels,
+                contract_representation=contract_representation,
+                clause_type_representation=clause_type_representation
+            )
+
+        loss = outputs["loss"]
+
+        return {"loss": loss.item(), "logits": outputs["logits"], "labels": labels}
+
+    def train(self, train_dataloader: DataLoader, val_dataloader: DataLoader, num_epochs: int, eval_steps: int = 100, save_path: str = None):
+        for epoch in range(num_epochs):
+            print(f"Epoch {epoch + 1}/{num_epochs}")
+            train_metrics = self.train_epoch(train_dataloader, epoch)
+
+            if (epoch + 1) % eval_steps == 0:
+                val_metrics = self.validate(val_dataloader)
+
+                # Print or log the evaluation metrics
+                print(f"Validation Loss: {val_metrics['loss']:.4f}")
+                if self.evaluation:
+                    # Generate text for evaluation
+                    references = []
+                    hypotheses = []
+                    for batch in val_dataloader:
+                        # This is a simplified example. You'll need to adapt it
+                        # based on how you want to generate and evaluate.
+                        input_ids = batch["input_ids"].to(self.device)
+                        attention_mask = batch["attention_mask"].to(self.device)
+                        labels = batch["labels"].to(self.device)
+                        contract_representation = batch["contract_representation"].to(self.device)
+                        clause_type_representation = batch["clause_type_representation"].to(self.device)
+                        # Generate text using the model
+                        generated_ids = self.model.generate(
+                            input_ids=input_ids,
+                            attention_mask=attention_mask,
+                            contract_representation=contract_representation,
+                            clause_type_representation=clause_type_representation,
+                            max_length=256,  # Example max length
+                            num_return_sequences=1,
+                            temperature=1.0,
+                            top_k=50,
+                            top_p=0.95,
+                            do_sample=True,
+                            pad_token_id=self.model.tokenizer.eos_token_id
+                        )
+                        # Decode generated text
+                        generated_texts = [self.model.tokenizer.decode(g, skip_special_tokens=True) for g in generated_ids]
+                        hypotheses.extend(generated_texts)
+
+                        # Use labels as references (assuming they are text)
+                        references.extend([self.model.tokenizer.decode(l, skip_special_tokens=True) for l in labels])
+
+                    generation_metrics = self.evaluation.evaluate_generation(
+                        references=references,
+                        hypotheses=hypotheses
+                    )
+                    print(f"Generation Metrics: {generation_metrics}")
+            if save_path is not None:
+                self.model.save_pretrained(save_path)
+            self.scheduler.step()
+
+    def train_epoch(self, dataloader: DataLoader, epoch: int) -> Dict[str, float]:
+        total_loss = 0.0
+        num_batches = len(dataloader)
+        progress_bar = tqdm(enumerate(dataloader), total=num_batches, desc=f"Epoch {epoch + 1}")
+
+        for batch_idx, batch in progress_bar:
+            metrics = self.train_step(batch)
+            total_loss += metrics["loss"]
+
+            # Update progress bar description with current loss
+            progress_bar.set_postfix({"loss": f"{metrics['loss']:.4f}"})
+
+        avg_loss = total_loss / num_batches
+        return {"loss": avg_loss}
+
+    def validate(self, dataloader: DataLoader) -> Dict[str, float]:
+        total_loss = 0.0
+        num_batches = len(dataloader)
+        all_logits = []
+        all_labels = []
+
+        with torch.no_grad():
+            for batch_idx, batch in enumerate(dataloader):
+                metrics = self.eval_step(batch)
+                total_loss += metrics["loss"]
+                all_logits.append(metrics["logits"])
+                all_labels.append(metrics["labels"])
+
+        avg_loss = total_loss / num_batches
+        return {
+            "loss": avg_loss,
+            "logits": torch.cat(all_logits, dim=0),
+            "labels": torch.cat(all_labels, dim=0)
+        }
+content_copy
+download
+Use code with caution.
+Python
+
+12. src/pipeline/clauserec_pipeline.py
+
+CLAUSERECPipeline Class:
+
+__init__(...):
+
+Purpose: Initializes the pipeline.
+
+Implementation:
+
+Minor change: Add the dataset to the pipeline.
+
+class CLAUSERECPipeline:
+    def __init__(self, hybrid_recommender: HybridRecommender, dataset: LedgarDataset):
+        self.hybrid_recommender = hybrid_recommender
+        self.dataset = dataset
+content_copy
+download
+Use code with caution.
+Python
+
+run_pipeline(...):
+
+Purpose: Runs the complete pipeline.
+
+Implementation:
+
+Major change: Add the dataset to the HybridRecommender class.
+
+def run_pipeline(self, contract_text: str, n_recommendations: int = 10) -> List[str]:
+    # 1. Preprocess the contract text (if needed)
+    # ...
+    self.hybrid_recommender.dataset = self.dataset
+    # 2. Run the hybrid recommender
+    recommendations = self.hybrid_recommender.recommend(contract_text, n_recommendations)
+
+    return recommendations
+</third_round_modifications>
+</plan_files>
+
+<final_instructions>
+The goal is to reproduce the results of the paper. I provided the paper and the plan files. Please be aware of context limitations. You are in an environment managed by "uv" (NOT uvicorn). To install dependencies, use "uv pip install [dependency]".
+Your tasks are:
+1. Determine if these instructions are complete and if not, complete them.
+2. Ensure they are the best way to reproduce the results of the paper.
+3. Implement the plan, making sure to use <plan_files> to access the plan files.
+3.1. Start with <first_round_modifications> and then <second_round_modifications>, and then <third_round_modifications>.
+4. You will iterate in the following way:
+4.1. Implement points 1 to 3. git add. && git commit -m "[message]."
+4.2. Compare the implementation with <plan_files>.
+4.3. If the implementation is not complete, go back to point 3.1 and implement the next file. git add. && git commit -m "[message]."
+4.4. If the implementation is complete, compare the implementation with the <paper>.
+4.5. If the implementation is not complete, go back to point 2 and ensure the instructions are complete. git add. && git commit -m "[message]."
+4.6. If the instructions are complete, go back to point 3.1 and implement the next file. git add. && git commit -m "[message]."
+4.7. If the instructions are complete and the implementation is complete, check file by file to determine if there are placeholders.
+4.8. If there are placeholders, go back to point 3.1 and implement the next file. git add. && git commit -m "[message]."
+4.9. If there are no placeholders, test using "uv run pytest".
+4.10. If the tests pass, git add. && git commit -m "[message]."
+4.11. If the tests fail, go back to point 3.1 and implement the next file. git add. && git commit -m "[message]."
+
+Meticulously review the code and the plan files and, step-by-step and round by round, implement the modifications, always ensuring the paper is correctly implemented.
+</final_instructions>
+</instructions>

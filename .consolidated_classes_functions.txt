@@ -1,0 +1,59 @@
+[Reference: See .index.txt for complete file listing]
+
+CLAUSEREC Classes and Functions Overview
+======================================
+
+1. LedgarDataset Class
+---------------------
+Methods:
+- load_data()
+- preprocess_clauses()
+- create_splits()
+- get_clause_embeddings()
+
+2. ContractBERT Class
+--------------------
+Methods:
+- fine_tune()
+- encode_clauses()
+- compute_similarity()
+- save_model()
+
+3. ClauseClassifier Class
+------------------------
+Methods:
+- train()
+- predict_clause_type()
+- evaluate()
+- save_classifier()
+
+4. ClauseGenerator Class
+-----------------------
+Methods:
+- generate_clause()
+- condition_on_context()
+- beam_search()
+- validate_output()
+
+5. CFRecommender Class
+---------------------
+Methods:
+- build_user_matrix()
+- train_collaborative_filter()
+- get_recommendations()
+- update_preferences()
+
+6. DocSimRecommender Class
+-------------------------
+Methods:
+- build_index()
+- compute_embeddings()
+- find_similar_clauses()
+- rank_recommendations()
+
+7. Utility Functions
+-------------------
+- preprocess_text()
+- evaluate_recommendations()
+- compute_metrics()
+- save_results()
