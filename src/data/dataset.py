@@ -4,8 +4,8 @@ from typing import Dict, List, Optional, Tuple, Union
 import torch
 from torch.utils.data import Dataset
 import numpy as np
-import random
 from dataclasses import dataclass
+import secrets
 
 @dataclass
 class ContractExample:
@@ -108,7 +108,7 @@ class ContractDataset(Dataset):
         Returns:
             Dict containing batch data
         """
-        indices = random.sample(range(len(self)), min(batch_size, len(self)))
+        indices = secrets.SystemRandom().sample(range(len(self)), min(batch_size, len(self)))
         batch = [self[i] for i in indices]
         return {
             "texts": [ex["text"] for ex in batch],
@@ -125,7 +125,7 @@ class ContractDataset(Dataset):
         """
         n = len(self)
         indices = list(range(n))
-        random.shuffle(indices)
+        secrets.SystemRandom().shuffle(indices)
         
         test_size = int(test_ratio * n)
         val_size = int(val_ratio * n)
