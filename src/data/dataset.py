@@ -1,11 +1,25 @@
 from pathlib import Path
 import os
+import json
+import glob
+import random
 from typing import Dict, List, Optional, Tuple, Union
 import torch
 from torch.utils.data import Dataset
 import numpy as np
-import random
 from dataclasses import dataclass
+import logging
+from sklearn.model_selection import train_test_split
+
+from src.utils.text_preprocessor import TextPreprocessor
+
+# Set seeds for reproducibility
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 @dataclass
 class ContractExample:
@@ -13,7 +27,7 @@ class ContractExample:
     label: Optional[str] = None
     metadata: Optional[Dict] = None
 
-class ContractDataset(Dataset):
+class LedgarDataset(Dataset):
     """Dataset class for contract clause data.
     
     Handles loading, preprocessing and validation of contract text data.
@@ -32,8 +46,9 @@ class ContractDataset(Dataset):
         self.data_dir = Path(data_dir)
         self.mode = mode
         self.examples = []
-        self.validate()
-        self.load_data()
+        self.preprocessor = TextPreprocessor()
+        self.all_clause_types = self._get_all_clause_types()
+        self.contracts = self.load_contracts()
         
     def __len__(self) -> int:
         return len(self.examples)
@@ -46,97 +61,138 @@ class ContractDataset(Dataset):
             "metadata": example.metadata if example.metadata else None
         }
         
-    def validate(self) -> bool:
-        """Validate the data directory and configuration.
+    def _get_all_clause_types(self) -> List[str]:
+        """Scans data_dir for clause labels."""
+        clause_types = set()
+        for file_path in self.data_dir.glob("*.json"):
+            with open(file_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if "clauses" in data:
+                    for clause in data["clauses"]:
+                        if "label" in clause:
+                            clause_types.add(clause["label"])
+        return sorted(list(clause_types))
 
-        Returns:
-            bool: True if validation passes
-        
-        Raises:
-            FileNotFoundError: If data directory doesnt exist
-            ValueError: If mode is invalid
-        """
-        if not self.data_dir.exists():
-            raise FileNotFoundError(f"Data path {self.data_dir} does not exist")
-        
-        if self.mode not in ["train", "val", "test"]:
-            raise ValueError(f"Invalid mode {self.mode}, must be one of: train, val, test")
-            
+    def validate_data(self, contract: Dict) -> bool:
+        """Validate a single contract dictionary."""
+        if not isinstance(contract, dict):
+            return False
+        if "id" not in contract or "text" not in contract or "clauses" not in contract:
+            return False
+        if not isinstance(contract["clauses"], list):
+            return False
+        for clause in contract["clauses"]:
+            if "text" not in clause or "label" not in clause:
+                return False
         return True
-        
-    def load_data(self) -> None:
+
+    def load_contracts(self, file_pattern: str = "*.json") -> List[Dict]:
         """Load contract files from data directory."""
-        for file_path in self.data_dir.glob("*.txt"):
+        contracts = []
+        for file_path in self.data_dir.glob(file_pattern):
             try:
-                text = self._read_file(file_path)
-                text = self.preprocess(text)
-                example = ContractExample(
-                    text=text,
-                    metadata={"file_path": str(file_path)}
-                )
-                self.examples.append(example)
+                with open(file_path, "r", encoding="utf-8") as f:
+                    contract = json.load(f)
+                if self.validate_data(contract):
+                    contracts.append(contract)
+                else:
+                    logger.warning(f"Skipping invalid contract file: {file_path}")
             except Exception as e:
-                print(f"Error loading {file_path}: {str(e)}")
+                logger.error(f"Error loading {file_path}: {str(e)}")
                 continue
-                
-    def _read_file(self, file_path: Path) -> str:
-        """Read and return contents of a text file."""
-        with open(file_path, "r", encoding="utf-8") as f:
-            return f.read()
+        return contracts
+        
+    def create_proxy_datasets(self, clause_types: List[str], train_ratio=0.6, val_ratio=0.2) -> Tuple[List[Dict], List[Dict], List[Dict]]:
+        """Create proxy datasets for training, validation, and testing."""
+        train_data, val_data, test_data = [], [], []
+
+        for clause_type in clause_types:
+            relevant_examples = []
+            non_relevant_examples = []
+
+            for contract in self.contracts:
+                clauses = contract.get("clauses", [])
+                contract_clause_labels = [c["label"] for c in clauses]
+
+                if clause_type in contract_clause_labels:
+                    # Create a copy of the contract with the relevant clause removed
+                    new_contract = contract.copy()
+                    new_contract["clauses"] = [c for c in clauses if c["label"] != clause_type]
+                    new_contract["label"] = clause_type
+                    relevant_examples.append(new_contract)
+                else:
+                    non_relevant_examples.append(contract)
+
+            # Balance the dataset
+            num_relevant = len(relevant_examples)
+            if len(non_relevant_examples) > num_relevant:
+                non_relevant_examples = random.sample(non_relevant_examples, num_relevant)
             
-    def preprocess(self, text: str) -> str:
-        """Clean and normalize input text.
+            all_examples = relevant_examples + non_relevant_examples
+            labels = [1] * len(relevant_examples) + [0] * len(non_relevant_examples)
+
+            if not all_examples:
+                continue
+
+            # Split the data
+            train_val_examples, test_examples, train_val_labels, _ = train_test_split(
+                all_examples, labels, test_size=(1 - train_ratio - val_ratio), random_state=42, stratify=labels
+            )
+            train_examples, val_examples, _, _ = train_test_split(
+                train_val_examples, train_val_labels, test_size=(val_ratio / (train_ratio + val_ratio)), random_state=42, stratify=train_val_labels
+            )
+
+            train_data.extend(train_examples)
+            val_data.extend(val_examples)
+            test_data.extend(test_examples)
+
+        return train_data, val_data, test_data
         
-        Args:
-            text: Input text to process
-            
-        Returns:
-            Processed text string
-        """
-        # Basic cleaning
-        text = text.strip()
-        # Normalize whitespace
-        text = " ".join(text.split())
-        return text
+    def get_clause_embeddings(self, model, clauses: List[str], batch_size: int = 32) -> torch.Tensor:
+        """Get clause embeddings using a ContractBERT model."""
+        all_embeddings = []
+        for i in range(0, len(clauses), batch_size):
+            batch = clauses[i:i+batch_size]
+            embeddings = model.encode_text(batch)
+            all_embeddings.append(embeddings.detach().cpu())
+        return torch.cat(all_embeddings)
         
-    def get_batch(self, batch_size: int) -> Dict[str, any]:
-        """Get a batch of examples for training.
+    def get_contract_representation(self, contract_text: str, model) -> torch.Tensor:
+        """Get the mean [CLS] embedding of a contract's clauses."""
+        # Simple paragraph splitting as a proxy for clause extraction
+        clauses = [p.strip() for p in contract_text.split('\n') if p.strip()]
+        if not clauses:
+            return torch.zeros(model.get_hidden_size())
+
+        embeddings = self.get_clause_embeddings(model, clauses)
+        return embeddings.mean(dim=0)
         
-        Args:
-            batch_size: Number of examples per batch
-            
-        Returns:
-            Dict containing batch data
-        """
-        indices = random.sample(range(len(self)), min(batch_size, len(self)))
-        batch = [self[i] for i in indices]
-        return {
-            "texts": [ex["text"] for ex in batch],
-            "labels": [ex["label"] for ex in batch] if batch[0]["label"] is not None else None,
-            "metadata": [ex["metadata"] for ex in batch] if batch[0]["metadata"] is not None else None
-        }
+    def get_clause_type_representation(self, clause_type: str, model) -> torch.Tensor:
+        """Get the mean embedding of a clause type."""
+        clause_texts = []
+        for contract in self.contracts:
+            for clause in contract.get("clauses", []):
+                if clause.get("label") == clause_type:
+                    clause_texts.append(clause["text"])
         
-    def split_data(self, val_ratio: float = 0.1, test_ratio: float = 0.1) -> None:
-        """Split data into train/val/test sets.
+        if not clause_texts:
+            return None
+
+        return self.get_clause_embeddings(model, clause_texts).mean(dim=0)
         
-        Args:
-            val_ratio: Ratio of validation set size to total
-            test_ratio: Ratio of test set size to total
-        """
-        n = len(self)
-        indices = list(range(n))
-        random.shuffle(indices)
+    def create_contract_clause_matrix(self) -> np.ndarray:
+        """Create a contract x clause_type binary presence matrix."""
+        num_contracts = len(self.contracts)
+        num_clause_types = len(self.all_clause_types)
+        clause_type_to_idx = {ct: i for i, ct in enumerate(self.all_clause_types)}
         
-        test_size = int(test_ratio * n)
-        val_size = int(val_ratio * n)
+        matrix = np.zeros((num_contracts, num_clause_types), dtype=np.int8)
         
-        test_indices = indices[:test_size]
-        val_indices = indices[test_size:test_size + val_size]
-        train_indices = indices[test_size + val_size:]
-        
-        if self.mode == "train":
-            self.examples = [self.examples[i] for i in train_indices]
-        elif self.mode == "val":
-            self.examples = [self.examples[i] for i in val_indices]
-        else:
-            self.examples = [self.examples[i] for i in test_indices]
+        for i, contract in enumerate(self.contracts):
+            for clause in contract.get("clauses", []):
+                clause_label = clause.get("label")
+                if clause_label in clause_type_to_idx:
+                    j = clause_type_to_idx[clause_label]
+                    matrix[i, j] = 1
+
+        return matrix
